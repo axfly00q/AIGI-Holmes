@@ -1,71 +1,114 @@
 """
 AIGI-Holmes Desktop Launcher
-Starts the Gradio web server in a background thread and opens a native
-desktop window (via pywebview) that hosts the UI without requiring a browser.
+
+Opens the Gradio web UI in a native desktop window using pywebview,
+so the user does not need to manually open a browser.
+
+Usage (Windows):
+    python desktop_app.py
+
+Requirements:
+    pip install -r requirements-app.txt
 """
 
 import sys
 import threading
 import time
-
-import webview
+import urllib.request
+import urllib.error
 
 # ---------------------------------------------------------------------------
-# Port used by the Gradio server (must match app.py default)
+# Configuration
 # ---------------------------------------------------------------------------
+HOST = "127.0.0.1"
 PORT = 7860
-SERVER_URL = f"http://127.0.0.1:{PORT}"
+URL = f"http://{HOST}:{PORT}"
+WINDOW_TITLE = "AIGI-Holmes — 新闻图片 AI 生成检测"
+STARTUP_TIMEOUT = 60  # seconds to wait for the server to become ready
+POLL_INTERVAL = 0.5   # seconds between readiness checks
 
 
-def _start_server() -> None:
-    """Import and launch the Gradio app in-process."""
-    # Import here so that PyInstaller can find the dependency at analysis time.
-    import app as aigi_app  # noqa: F401 - side-effects: builds `demo`
+# ---------------------------------------------------------------------------
+# Server readiness helper
+# ---------------------------------------------------------------------------
 
-    aigi_app.demo.launch(
-        server_name="127.0.0.1",
-        server_port=PORT,
-        share=False,
-        prevent_thread_lock=True,  # let the main thread drive the window
-    )
-
-
-def _wait_for_server(timeout: float = 30.0) -> bool:
-    """Poll until the Gradio server responds or the timeout expires."""
-    import urllib.request
-    import urllib.error
-
+def _wait_for_server(url: str, timeout: float, poll_interval: float) -> bool:
+    """Poll *url* until it responds with HTTP 200 (or any non-connection-error
+    status) or *timeout* seconds elapse.  Returns True when ready."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            urllib.request.urlopen(SERVER_URL, timeout=1)
+            with urllib.request.urlopen(url, timeout=2):
+                return True
+        except urllib.error.HTTPError:
+            # Any HTTP error means the server is up (Gradio may return 4xx
+            # on some paths before the UI is fully loaded, but the port is open).
             return True
         except Exception:
-            time.sleep(0.25)
+            pass
+        time.sleep(poll_interval)
     return False
 
 
-def main() -> None:
-    # Start the server in a daemon thread so it shuts down with the process.
-    server_thread = threading.Thread(target=_start_server, daemon=True)
-    server_thread.start()
+# ---------------------------------------------------------------------------
+# Gradio server thread
+# ---------------------------------------------------------------------------
 
-    if not _wait_for_server():
-        # Fallback: show an error dialog instead of silently failing.
-        webview.create_window(
-            "AIGI-Holmes — 启动失败",
-            html="<h2 style='font-family:sans-serif;color:red'>服务启动超时，请重试。</h2>",
+def _run_gradio_server() -> None:
+    """Launch the Gradio demo in the background without blocking this thread."""
+    # Import inside the function so the model loads on this thread, not the
+    # main thread, which keeps pywebview's event loop responsive on Windows.
+    from app import demo  # noqa: PLC0415 – intentional late import
+    demo.launch(
+        server_name=HOST,
+        server_port=PORT,
+        share=False,
+        prevent_thread_lock=True,
+        quiet=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    try:
+        import webview  # noqa: PLC0415 – optional dependency
+    except ImportError:
+        print(
+            "ERROR: pywebview is not installed.\n"
+            "Run:  pip install pywebview\n"
+            "Then try again.",
+            file=sys.stderr,
         )
-        webview.start()
         sys.exit(1)
 
+    # Start the Gradio server in a daemon thread so it is automatically
+    # stopped when the main (UI) thread exits.
+    server_thread = threading.Thread(target=_run_gradio_server, daemon=True, name="gradio-server")
+    server_thread.start()
+
+    print(f"Waiting for server to start on {URL} …")
+    ready = _wait_for_server(URL, timeout=STARTUP_TIMEOUT, poll_interval=POLL_INTERVAL)
+    if not ready:
+        print(
+            f"ERROR: Server did not become ready within {STARTUP_TIMEOUT} s.\n"
+            "Check that port 7860 is not already in use.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print("Server is ready — opening desktop window.")
     window = webview.create_window(
-        "AIGI-Holmes — 新闻图片 AI 生成检测",
-        SERVER_URL,
+        title=WINDOW_TITLE,
+        url=URL,
         width=1100,
-        height=780,
+        height=800,
         resizable=True,
+        min_size=(800, 600),
     )
+    # webview.start() blocks until the window is closed.
     webview.start()
 
 
