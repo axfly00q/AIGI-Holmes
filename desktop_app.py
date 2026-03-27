@@ -1,5 +1,6 @@
 """
 AIGI-Holmes Desktop Launcher
+
 Opens the Gradio web UI in a native desktop window using pywebview,
 so the user does not need to manually open a browser.
 
