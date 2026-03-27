@@ -5,39 +5,52 @@ Detects whether photos (e.g., from news articles) are AI-generated or real.
 
 import ipaddress
 import io
+import os
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
 import gradio as gr
 import requests
 import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
 from PIL import Image
-from transformers import pipeline
 
 # ---------------------------------------------------------------------------
-# Model initialisation
+# Model initialisation — local finetuned ResNet50
 # ---------------------------------------------------------------------------
-DEVICE = 0 if torch.cuda.is_available() else -1
-MODEL_ID = "umm-maybe/AI-image-detector"
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "finetuned_fake_real_resnet50.pth")
+# Classes are ['FAKE', 'REAL'] (alphabetical, matching ImageFolder in finetune.py)
+CLASSES = ["FAKE", "REAL"]
 
-detector = pipeline(
-    "image-classification",
-    model=MODEL_ID,
-    device=DEVICE,
-)
+def _load_model():
+    model = models.resnet50(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, len(CLASSES))
+    state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
+    model.load_state_dict(state_dict)
+    model.to(DEVICE)
+    model.eval()
+    return model
+
+_model = _load_model()
+
+_transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225]),
+])
 
 LABELS_ZH = {
-    "artificial": "🤖 AI 生成",
-    "real": "📷 真实照片",
+    "FAKE": "🤖 AI 生成",
+    "REAL": "📷 真实照片",
 }
 
 
 def _label_zh(label: str) -> str:
-    label_lower = label.lower()
-    for key, zh in LABELS_ZH.items():
-        if key in label_lower:
-            return zh
-    return label
+    return LABELS_ZH.get(label.upper(), label)
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +59,13 @@ def _label_zh(label: str) -> str:
 
 def detect_image(pil_image: Image.Image):
     """Run the detector on a PIL image and return formatted results."""
-    results = detector(pil_image)
+    img_tensor = _transform(pil_image.convert("RGB")).unsqueeze(0).to(DEVICE)
+    with torch.no_grad():
+        output = _model(img_tensor)
+        probs = torch.softmax(output, dim=1)[0]
+
+    results = [{"label": cls, "score": probs[i].item()} for i, cls in enumerate(CLASSES)]
+    results.sort(key=lambda x: x["score"], reverse=True)
     top = results[0]
     label_zh = _label_zh(top["label"])
     confidence = top["score"] * 100
@@ -253,7 +272,7 @@ with gr.Blocks(title="AIGI-Holmes 新闻图片真实性检测") as demo:
     gr.Markdown(
         """
 ---
-**模型**：[umm-maybe/AI-image-detector](https://huggingface.co/umm-maybe/AI-image-detector)（ViT 微调，基于 AI 生成 vs 真实图片数据集训练）  
+**模型**：本地微调 ResNet50（`finetuned_fake_real_resnet50.pth`），基于 AI 生成 vs 真实图片数据集训练  
 **提示**：结果仅供参考，复杂或高质量 AI 图片可能难以被检测。
         """
     )
