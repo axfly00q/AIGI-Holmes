@@ -4,3 +4,6 @@ torch>=2.0
 torchvision>=0.15
 Pillow>=9.0
 requests>=2.28
+
+# Desktop-window launcher (desktop_app.py) — Windows native window via pywebview
+pywebview>=4.0
