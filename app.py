@@ -6,6 +6,7 @@ Detects whether photos (e.g., from news articles) are AI-generated or real.
 import ipaddress
 import io
 import os
+import sys
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -21,7 +22,13 @@ from PIL import Image
 # Model initialisation — local finetuned ResNet50
 # ---------------------------------------------------------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "finetuned_fake_real_resnet50.pth")
+if getattr(sys, 'frozen', False):
+    # Running as PyInstaller .exe
+    BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
+else:
+    # Running as Python script
+    BASE_DIR = os.path.dirname(__file__)
+MODEL_PATH = os.path.join(BASE_DIR, "finetuned_fake_real_resnet50.pth")
 # Classes are ['FAKE', 'REAL'] (alphabetical, matching ImageFolder in finetune.py)
 CLASSES = ["FAKE", "REAL"]
 
