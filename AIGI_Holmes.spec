@@ -7,6 +7,7 @@
 # The resulting executable is written to dist/AIGI-Holmes/AIGI-Holmes.exe
 
 import os
+import site
 from pathlib import Path
 
 ROOT = Path(SPECPATH)
@@ -16,28 +17,100 @@ a = Analysis(
     pathex=[str(ROOT)],
     binaries=[],
     datas=[
-        # Include the fine-tuned model weights
-        (str(ROOT / "finetuned_fake_real_resnet50.pth"), "."),
-        # Include the application icon
-        (str(ROOT / "asset" / "app.ico"), "asset"),
-    ],
+    (str(ROOT / "finetuned_fake_real_resnet50.pth"), "."),
+    (str(ROOT / "asset" / "app.ico"), "asset"),
+],
     hiddenimports=[
-        # Gradio and its ecosystem may need explicit hints
+        # Gradio and its ecosystem
         "gradio",
         "gradio.components",
+        "gradio.components.base",
         "gradio.routes",
         "gradio.themes",
-        # torchvision models
+        "gradio.themes.base",
+        "gradio.themes.utils",
+        "gradio.blocks",
+        "gradio.interface",
+        "gradio.helpers",
+        "gradio.processing_utils",
+        "gradio.utils",
+        # gradio_client (bundled with Gradio 4.x)
+        "gradio_client",
+        "gradio_client.utils",
+        # ASGI stack Gradio relies on
+        "fastapi",
+        "fastapi.staticfiles",
+        "fastapi.responses",
+        "starlette",
+        "starlette.routing",
+        "starlette.responses",
+        "starlette.staticfiles",
+        "starlette.middleware",
+        "starlette.middleware.cors",
+        # uvicorn (Gradio's HTTP server)
+        "uvicorn",
+        "uvicorn.main",
+        "uvicorn.config",
+        "uvicorn.logging",
+        "uvicorn.loops",
+        "uvicorn.loops.auto",
+        "uvicorn.loops.asyncio",
+        "uvicorn.protocols",
+        "uvicorn.protocols.http",
+        "uvicorn.protocols.http.auto",
+        "uvicorn.protocols.http.h11_impl",
+        "uvicorn.protocols.http.httptools_impl",
+        "uvicorn.protocols.websockets",
+        "uvicorn.protocols.websockets.auto",
+        "uvicorn.protocols.websockets.websockets_impl",
+        "uvicorn.lifespan",
+        "uvicorn.lifespan.on",
+        # pydantic (FastAPI / Gradio data validation)
+        "pydantic",
+        "pydantic.v1",
+        # anyio (async I/O used by Starlette / FastAPI)
+        "anyio",
+        "anyio.from_thread",
+        "anyio._backends._asyncio",
+        # HTTP stack
+        "httpx",
+        "httpcore",
+        "h11",
+        # File uploads
+        "python_multipart",
+        "multipart",
+        # Async file I/O used by Gradio
+        "aiofiles",
+        "aiofiles.os",
+        # WebSocket support
+        "websockets",
+        "websockets.legacy",
+        "websockets.legacy.server",
+        # Templating
+        "markupsafe",
+        "jinja2",
+        # torch and torchvision
+        "torch",
+        "torch.nn",
         "torchvision.models",
         "torchvision.transforms",
-        # pywebview backends – include all so the right one is selected at runtime
+        # pywebview — Windows backends (pywebview 4.x layout)
+        "webview",
+        "webview.platforms",
         "webview.platforms.winforms",
-        "webview.platforms.gtk",
-        "webview.platforms.cocoa",
+        "webview.platforms.edgechromium",
+        # pythonnet required by pywebview WinForms/EdgeChromium backends
+        "clr",
+        "clr_loader",
         # Other runtime imports
         "PIL",
+        "PIL.Image",
         "requests",
         "ipaddress",
+        "io",
+        "packaging",
+        "packaging.version",
+        "orjson",
     ],
     hookspath=[],
     hooksconfig={},
@@ -58,7 +131,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,           # no console window for end users
+    console=False,         # hide console window for end users
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

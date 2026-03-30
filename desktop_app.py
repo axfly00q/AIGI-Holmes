@@ -11,11 +11,23 @@ Requirements:
     pip install -r requirements-app.txt
 """
 
+import os
 import sys
 import threading
 import time
 import urllib.request
 import urllib.error
+
+# ---------------------------------------------------------------------------
+# In windowed PyInstaller builds (console=False) sys.stdout / sys.stderr can
+# be None, causing any print() call to raise AttributeError.  Redirect them
+# to devnull so the rest of the startup code runs safely.
+# ---------------------------------------------------------------------------
+if getattr(sys, "frozen", False):
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -51,20 +63,22 @@ def _wait_for_server(url: str, timeout: float, poll_interval: float) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Gradio server thread
+# Flask server thread
 # ---------------------------------------------------------------------------
 
-def _run_gradio_server() -> None:
-    """Launch the Gradio demo in the background without blocking this thread."""
+def _run_flask_server() -> None:
+    """Launch the Flask app in the background without blocking this thread."""
     # Import inside the function so the model loads on this thread, not the
     # main thread, which keeps pywebview's event loop responsive on Windows.
-    from app import demo  # noqa: PLC0415 – intentional late import
-    demo.launch(
-        server_name=HOST,
-        server_port=PORT,
-        share=False,
-        prevent_thread_lock=True,
-        quiet=True,
+    from server import app  # noqa: PLC0415 – intentional late import
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)  # suppress Flask request logs
+    app.run(
+        host=HOST,
+        port=PORT,
+        debug=False,
+        use_reloader=False,
     )
 
 
@@ -84,9 +98,9 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # Start the Gradio server in a daemon thread so it is automatically
+    # Start the Flask server in a daemon thread so it is automatically
     # stopped when the main (UI) thread exits.
-    server_thread = threading.Thread(target=_run_gradio_server, daemon=True, name="gradio-server")
+    server_thread = threading.Thread(target=_run_flask_server, daemon=True, name="flask-server")
     server_thread.start()
 
     print(f"Waiting for server to start on {URL} …")
