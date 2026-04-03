@@ -163,14 +163,14 @@
           </div>
           <label class="btn-secondary" for="batchInput">点击选择文件</label>
           <input type="file" id="batchInput" accept="image/*,.txt,.html,.htm,.pdf,.docx" multiple hidden />
-          <label class="btn-secondary" for="folderInput">选择文件夹</label>
+          <button class="btn-secondary" id="btnPickFolder" type="button">选择文件夹</button>
           <input type="file" id="folderInput" webkitdirectory multiple hidden />
         </div>
 
         <!-- 层2：收缩顶部控制条 -->
         <div class="batch-bar" id="batchBar" hidden>
           <label class="btn-secondary btn-sm batch-bar__add" for="batchInput">+ 继续添加</label>
-          <label class="btn-secondary btn-sm batch-bar__add" for="folderInput">+ 添加文件夹</label>
+          <button class="btn-secondary btn-sm batch-bar__add" id="btnPickFolderBar" type="button">+ 添加文件夹</button>
           <div class="batch-progress-wrap">
             <div class="batch-progress-row">
               <span class="batch-progress-label" id="uploadLabel">上传中 0%</span>
@@ -184,9 +184,32 @@
           <button class="btn-icon btn-icon--danger" id="btnBatchCancel" title="取消">✕</button>
         </div>
 
-        <!-- 层3：结果区 -->
+        <!-- 层3：结果区（两栏：左图片网格 + 右统计面板） -->
         <p class="status-msg" id="batchStatus"></p>
-        <div class="gallery" id="batchGallery"></div>
+        <div class="batch-result-layout" id="batchResultLayout" hidden>
+          <!-- 左栏：图片网格 -->
+          <div class="batch-gallery-col">
+            <div class="gallery" id="batchGallery"></div>
+          </div>
+          <!-- 右栏：统计面板 -->
+          <div class="batch-stats-panel" id="batchStatsPanel">
+            <div class="stats-credibility-wrap">
+              <span class="stats-label">总体可信率</span>
+              <div class="stats-credibility-row">
+                <span class="stats-value" id="statsCredibility">--</span>
+                <span class="stats-unit">%</span>
+              </div>
+            </div>
+            <div class="stats-counts">
+              共 <span id="statsTotal">0</span> 张 &nbsp;·&nbsp;
+              真实 <span class="stats-real" id="statsReal">0</span> 张 &nbsp;·&nbsp;
+              AI生成 <span class="stats-fake" id="statsFake">0</span> 张
+            </div>
+            <div class="stats-radar-title">内容分类分布</div>
+            <div id="statsRadar"></div>
+            <div class="stats-cats" id="statsCats"></div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -254,6 +277,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

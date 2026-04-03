@@ -722,10 +722,113 @@ details[open] > .explain-toggle::before {
   .gallery { grid-template-columns: repeat(2, 1fr); }
   .url-row { flex-direction: column; }
   .btn-url { width: 100%; }
+  .batch-result-layout { flex-direction: column; }
+  .batch-stats-panel { width: 100%; position: static; }
 }
 
 @media (max-width: 540px) {
   .gallery { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   Batch detection — stats panel (right column)
+   ============================================================ */
+
+/* Two-column layout: gallery left + stats panel right */
+.batch-result-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-top: 12px;
+}
+.batch-result-layout[hidden] { display: none; }
+
+.batch-gallery-col {
+  flex: 1 1 0;
+  min-width: 0; /* prevent overflow in flex context */
+}
+
+.batch-stats-panel {
+  width: 276px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 80px;
+  background: #1e2028;
+  border: 1px solid #2e3340;
+  border-radius: 12px;
+  padding: 20px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Credibility score */
+.stats-credibility-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stats-label {
+  font-size: 0.78rem;
+  color: #8b90a0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.stats-credibility-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.stats-value {
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #4ade80; /* default green; JS will update dynamically */
+  transition: color 0.4s;
+}
+.stats-unit {
+  font-size: 1.1rem;
+  color: #8b90a0;
+  font-weight: 500;
+}
+
+/* Count summary */
+.stats-counts {
+  font-size: 0.82rem;
+  color: #8b90a0;
+  line-height: 1.6;
+}
+.stats-real { color: #4ade80; font-weight: 600; }
+.stats-fake { color: #f87171; font-weight: 600; }
+
+/* Radar chart */
+.stats-radar-title {
+  font-size: 0.78rem;
+  color: #8b90a0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+#statsRadar {
+  width: 100%;
+  height: 260px;
+}
+
+/* Category tags */
+.stats-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+}
+.cat-tag {
+  display: inline-block;
+  padding: 3px 9px;
+  background: #272b35;
+  border: 1px solid #2e3340;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  color: #c0c4d0;
+  white-space: nowrap;
 }
 
 /* ============================================================

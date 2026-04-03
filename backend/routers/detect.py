@@ -30,6 +30,7 @@ from detect import (
     validate_public_url,
 )
 from detect_text import extract_images_from_file
+from backend.clip_classify import classify_image
 
 router = APIRouter(prefix="/api", tags=["detection"])
 
@@ -366,6 +367,10 @@ async def _process_batch_run(
             cache_data = {k: v for k, v in result.items() if k != "cam_image"}
             await set_cached_result(item["raw"], cache_data)
 
+        # CLIP content classification (runs in executor to avoid blocking)
+        loop = asyncio.get_running_loop()
+        category = await loop.run_in_executor(None, classify_image, item["image"])
+
         # Build thumbnail
         thumb_buf = io.BytesIO()
         thumb = item["image"].copy()
@@ -385,6 +390,7 @@ async def _process_batch_run(
                 "confidence": round(result["confidence"], 1),
                 "probs": [{**p, "score": round(p["score"], 1)} for p in result["probs"]],
                 "thumbnail": f"data:image/jpeg;base64,{b64}",
+                "category": category,
             },
         })
 
@@ -406,7 +412,7 @@ async def api_detect_batch_run(
     # Read all upload content so the XHR completes and
     # upload-progress reaches 100% before background processing starts.
     uploads_data: list[dict] = []
-    for upload in files[:20]:
+    for upload in files[:50]:
         raw = await upload.read()
         if not raw:
             continue
