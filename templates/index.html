@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIGI-Holmes 新闻图片真实性检测</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app">
+
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-brand">
+          <span class="header-logo">🔍</span>
+          <div>
+            <h1 class="header-title">AIGI-Holmes</h1>
+            <p class="header-sub">新闻图片 AI 生成检测</p>
+          </div>
+        </div>
+        <div class="auth-bar" id="authBar">
+          <div id="authGuest">
+            <button class="btn-secondary" id="btnShowLogin">登录 / 注册</button>
+          </div>
+          <div id="authUser" hidden>
+            <span class="auth-username" id="authUsername"></span>
+            <span class="auth-role-badge" id="authRoleBadge"></span>
+            <button class="btn-secondary btn-sm" id="btnShowRole">管理</button>
+            <button class="btn-secondary btn-sm" id="btnLogout">退出</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" role="tab" data-tab="upload">📤 上传图片</button>
+        <button class="tab-btn" role="tab" data-tab="url">🌐 新闻 URL 检测</button>
+        <button class="tab-btn" role="tab" data-tab="batch">📁 批量检测</button>
+      </div>
+
+      <div class="tab-pane active" id="tab-upload" role="tabpanel">
+        <div class="upload-layout">
+          <div class="upload-panel">
+            <div class="drop-zone" id="dropZone">
+              <div class="drop-hint" id="dropHint">
+                <svg class="drop-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M24 32V16M17 23l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <rect x="6" y="6" width="36" height="36" rx="6" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
+                </svg>
+                <p class="drop-text">将图像拖放到此处</p>
+                <p class="drop-or">— 或 —</p>
+                <label class="btn-secondary" for="fileInput">点击选择文件</label>
+                <input type="file" id="fileInput" accept="image/*" hidden />
+              </div>
+              <img class="preview-img" id="previewImg" alt="预览" />
+              <img class="cam-overlay" id="camOverlay" alt="热力图" />
+            </div>
+            <div class="upload-actions">
+              <button class="btn-cam-toggle" id="btnCamToggle" title="显示/隐藏热力图" hidden>🌡️ 热力图</button>
+              <button class="btn-icon" id="btnReupload" title="重新上传" hidden>
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+              </button>
+              <button class="btn-icon btn-icon--danger" id="btnClear" title="清除图片" hidden>
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="result-panel">
+            <div class="result-empty" id="resultEmpty">
+              <svg class="result-empty-icon" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="2"/><path d="M16 24h16M24 16v16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <p>检测结果将显示在这里</p>
+            </div>
+
+            <div class="result-card" id="resultCard">
+              <div class="verdict" id="verdict">
+                <span class="verdict-icon" id="verdictIcon"></span>
+                <span class="verdict-label" id="verdictLabel"></span>
+              </div>
+              <div class="conf-section">
+                <div class="conf-header">
+                  <span class="conf-title">置信度</span>
+                  <span class="conf-value" id="confValue">0%</span>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-bar" id="confBar"></div>
+                </div>
+              </div>
+              <div class="prob-section">
+                <p class="prob-title">各类别概率</p>
+                <div class="prob-rows" id="probRows"></div>
+              </div>
+              <details class="explain-section" id="explainSection">
+                <summary class="explain-toggle">📝 检测依据</summary>
+                <div class="explain-body" id="explainBody">
+                  <div class="explain-level" id="explainLevel"></div>
+                  <p class="explain-summary" id="explainSummary"></p>
+                  <ul class="explain-clues" id="explainClues"></ul>
+                  <p class="explain-disclaimer" id="explainDisclaimer"></p>
+                </div>
+              </details>
+            </div>
+
+            <div class="report-download" id="reportDownload" hidden>
+              <p class="prob-title">下载报告</p>
+              <div class="report-btn-row">
+                <button class="btn-report" id="btnDownloadPdf">📄 PDF</button>
+                <button class="btn-report" id="btnDownloadExcel">📊 Excel</button>
+              </div>
+            </div>
+
+            <!-- ✅ 快捷操作按钮 正确位置 -->
+            <div id="quickActions" hidden style="margin-top:16px; padding:12px; border:1px solid #ddd; border-radius:10px; background:#1e1e1e;">
+              <p style="color:#fff; margin:0 0 10px 0;">快捷操作</p>
+              <div style="display:flex; gap:8px;">
+                <button id="btnMarkMisjudge" style="flex:1;padding:10px;border:none;border-radius:6px;background:#ffca29; color:#000;cursor:pointer;">🚨 标记误判</button>
+                <button id="btnRedetect" style="flex:1;padding:10px;border:none;border-radius:6px;background:#3b82f6; color:#fff;cursor:pointer;">🔄 重新检测</button>
+                <button id="btnShare" style="flex:1;padding:10px;border:none;border-radius:6px;background:#10b981; color:#fff;cursor:pointer;">🔗 分享同事</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <button class="btn-detect" id="btnDetect" disabled>开始检测</button>
+        <p class="status-msg" id="uploadStatus"></p>
+      </div>
+
+      <div class="tab-pane" id="tab-url" role="tabpanel">
+        <div class="url-row">
+          <input class="url-input" id="urlInput" type="url" placeholder="https://example.com/news/article" autocomplete="off" />
+          <button class="btn-url" id="btnUrl">抓取并检测</button>
+        </div>
+        <p class="status-msg" id="urlStatus"></p>
+        <div class="gallery" id="gallery"></div>
+        <div class="report-section" id="reportSection" hidden>
+          <h3 class="report-title">汇总报告</h3>
+          <div class="report-body" id="reportBody"></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab-batch" role="tabpanel">
+        <div class="batch-hint" id="batchAuthHint" hidden>
+          <p>⚠️ 批量检测需要 <strong>auditor</strong> 或 <strong>admin</strong> 账号登录后使用。</p>
+        </div>
+
+        <!-- 层1：初始大拖拽区 -->
+        <div class="batch-landing" id="batchLanding">
+          <svg class="drop-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 32V16M17 23l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="6" y="6" width="36" height="36" rx="6" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
+          </svg>
+          <p class="drop-text">拖入文件开始检测</p>
+          <p class="drop-or">支持图片 · PDF · DOCX · HTML · TXT，自动提取内嵌图片</p>
+          <div class="batch-file-chips">
+            <span class="batch-chip">.jpg</span>
+            <span class="batch-chip">.png</span>
+            <span class="batch-chip">.pdf</span>
+            <span class="batch-chip">.docx</span>
+            <span class="batch-chip">.html</span>
+            <span class="batch-chip">.txt</span>
+          </div>
+          <label class="btn-secondary" for="batchInput">点击选择文件</label>
+          <input type="file" id="batchInput" accept="image/*,.txt,.html,.htm,.pdf,.docx" multiple hidden />
+          <label class="btn-secondary" for="folderInput">选择文件夹</label>
+          <input type="file" id="folderInput" webkitdirectory multiple hidden />
+        </div>
+
+        <!-- 层2：收缩顶部控制条 -->
+        <div class="batch-bar" id="batchBar" hidden>
+          <label class="btn-secondary btn-sm batch-bar__add" for="batchInput">+ 继续添加</label>
+          <label class="btn-secondary btn-sm batch-bar__add" for="folderInput">+ 添加文件夹</label>
+          <div class="batch-progress-wrap">
+            <div class="batch-progress-row">
+              <span class="batch-progress-label" id="uploadLabel">上传中 0%</span>
+              <div class="batch-progress-track"><div class="batch-progress-fill" id="uploadProgressBar"></div></div>
+            </div>
+            <div class="batch-progress-row">
+              <span class="batch-progress-label" id="detectLabel">检测进度 0/0</span>
+              <div class="batch-progress-track"><div class="batch-progress-fill batch-progress-fill--detect" id="detectProgressBar"></div></div>
+            </div>
+          </div>
+          <button class="btn-icon btn-icon--danger" id="btnBatchCancel" title="取消">✕</button>
+        </div>
+
+        <!-- 层3：结果区 -->
+        <p class="status-msg" id="batchStatus"></p>
+        <div class="gallery" id="batchGallery"></div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>模型：本地微调 ResNet50（<code>finetuned_fake_real_resnet50.pth</code>），基于 AI 生成 vs 真实图片数据集训练</p>
+      <p>提示：结果仅供参考，复杂或高质量 AI 图片可能难以被检测。</p>
+    </footer>
+  </div>
+
+  <!-- ── 登录/注册弹窗（原有） ──────────────────────────────────── -->
+  <div class="modal-overlay" id="loginModal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="btnModalClose">✕</button>
+      <div class="modal-tabs">
+        <button class="modal-tab-btn active" id="tabLoginBtn">登录</button>
+        <button class="modal-tab-btn" id="tabRegisterBtn">注册</button>
+      </div>
+      <div id="loginForm">
+        <input class="url-input" id="loginUser" placeholder="用户名" autocomplete="username" />
+        <input class="url-input" style="margin-top:10px" id="loginPass" type="password" placeholder="密码" autocomplete="current-password" />
+        <button class="btn-detect" id="btnLogin" style="margin-top:14px">登录</button>
+        <p class="status-msg" id="loginStatus"></p>
+      </div>
+      <div id="registerForm" hidden>
+        <input class="url-input" id="regUser" placeholder="用户名（至少 3 位）" autocomplete="username" />
+        <input class="url-input" style="margin-top:10px" id="regPass" type="password" placeholder="密码（至少 6 位）" autocomplete="new-password" />
+        <button class="btn-detect" id="btnRegister" style="margin-top:14px">注册</button>
+        <p class="status-msg" id="registerStatus"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 角色管理弹窗（原有） ────────────────────────────────── -->
+  <div class="modal-overlay" id="roleModal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="btnRoleModalClose">✕</button>
+      <h3 class="modal-title">角色管理</h3>
+      <div id="roleStep1">
+        <p class="role-step-hint">请输入管理密码以继续：</p>
+        <input class="url-input" id="rolePass" type="password" placeholder="管理密码" autocomplete="off" />
+        <button class="btn-detect" id="btnRoleUnlock" style="margin-top:14px">验证</button>
+        <p class="role-error-msg" id="rolePassError" hidden>❌ 密码错误，请重新输入</p>
+      </div>
+      <div id="roleStep2" hidden>
+        <p class="role-step-hint">输入目标用户名，选择新角色：</p>
+        <input class="url-input" id="roleTargetUser" placeholder="目标用户名" autocomplete="off" />
+        <select class="role-select" id="roleSelect" style="margin-top:10px">
+          <option value="user">user — 普通用户</option>
+          <option value="auditor">auditor — 审核员</option>
+          <option value="admin">admin — 管理员</option>
+        </select>
+        <button class="btn-detect" id="btnRoleChange" style="margin-top:14px">修改角色</button>
+        <p class="status-msg" id="roleStatus"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ 新增：快捷操作统一风格弹窗（复用登录弹窗样式） -->
+  <div class="modal-overlay" id="actionModal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="btnActionModalClose">✕</button>
+      <div id="actionModalContent">
+        <!-- 内容由JS动态填充 -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
