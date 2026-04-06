@@ -53,9 +53,30 @@ val_transform = transforms.Compose([
 train_dataset = ImageFolder(train_dir, transform=train_transform)
 val_dataset   = ImageFolder(val_dir,   transform=val_transform)
 
-print("ImageFolder自动识别的训练样本数:", len(train_dataset))
-print("ImageFolder自动识别的验证样本数:", len(val_dataset))
-print("类别标签:", train_dataset.classes)
+# 合并用户反馈数据集（data/feedback/FAKE + REAL，由管理员集成操作生成）
+_feedback_dir = r"data\feedback"
+_feedback_classes = all(
+    os.path.exists(os.path.join(_feedback_dir, c)) and count_valid_images(os.path.join(_feedback_dir, c)) > 0
+    for c in ["FAKE", "REAL"]
+)
+if os.path.exists(_feedback_dir) and _feedback_classes:
+    from torch.utils.data import ConcatDataset
+    _feedback_dataset = ImageFolder(_feedback_dir, transform=train_transform)
+    _original_classes = train_dataset.classes  # 保留原始类别标签
+    train_dataset = ConcatDataset([train_dataset, _feedback_dataset])
+    train_dataset.classes = _original_classes  # type: ignore[attr-defined]
+    print(f"已合并用户反馈数据集: {len(_feedback_dataset)} 张  →  训练样本总计: {len(train_dataset)}")
+else:
+    if os.path.exists(_feedback_dir):
+        print(f"[提示] 反馈目录存在但 FAKE/REAL 子目录为空，跳过合并")
+    else:
+        print(f"[提示] 未发现反馈数据集 ({_feedback_dir})，可在管理后台点击「集成到训练集」生成")
+
+print("训练样本总数:", len(train_dataset))
+print("验证样本数:", len(val_dataset))
+# 获取类别标签（兼容 ImageFolder 和 ConcatDataset）
+_train_classes = getattr(train_dataset, 'classes', ['FAKE', 'REAL'])
+print("类别标签:", _train_classes)
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0)
 val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
@@ -64,7 +85,7 @@ val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, n
 model = models.resnet50(pretrained=True)
 for param in model.parameters():
     param.requires_grad = False
-model.fc = nn.Linear(model.fc.in_features, len(train_dataset.classes))
+model.fc = nn.Linear(model.fc.in_features, len(_train_classes))
 model = model.to(DEVICE)
 
 criterion = nn.CrossEntropyLoss()
@@ -121,6 +142,6 @@ if imgs:
         prob = torch.softmax(output, dim=1)[0]
         pred = torch.argmax(prob).item()
     print(f"\n测试图片: {imgs[0]}")
-    print(f"预测类别: {train_dataset.classes[pred]}，置信度: {prob[pred]*100:.2f}%")
+    print(f"预测类别: {_train_classes[pred]}，置信度: {prob[pred]*100:.2f}%")
 else:
     print("【警告】没有找到data\\val\\FAKE下的图片，未进行推理")

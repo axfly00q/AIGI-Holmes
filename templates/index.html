@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIGI-Holmes 新闻图片真实性检测</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+    <link rel="stylesheet" href="/static/css/style.css?v=4" />
 </head>
 <body>
   <div class="app">
@@ -26,6 +26,7 @@
             <span class="auth-username" id="authUsername"></span>
             <span class="auth-role-badge" id="authRoleBadge"></span>
             <button class="btn-secondary btn-sm" id="btnShowRole">管理</button>
+            <button class="btn-secondary btn-sm" id="btnAdminPanel" hidden title="管理后台">🛡️ 管理后台</button>
             <button class="btn-secondary btn-sm" id="btnLogout">退出</button>
           </div>
         </div>
@@ -91,15 +92,6 @@
                 <p class="prob-title">各类别概率</p>
                 <div class="prob-rows" id="probRows"></div>
               </div>
-              <details class="explain-section" id="explainSection">
-                <summary class="explain-toggle">📝 检测依据</summary>
-                <div class="explain-body" id="explainBody">
-                  <div class="explain-level" id="explainLevel"></div>
-                  <p class="explain-summary" id="explainSummary"></p>
-                  <ul class="explain-clues" id="explainClues"></ul>
-                  <p class="explain-disclaimer" id="explainDisclaimer"></p>
-                </div>
-              </details>
             </div>
 
             <div class="report-download" id="reportDownload" hidden>
@@ -125,6 +117,17 @@
 
         <button class="btn-detect" id="btnDetect" disabled>开始检测</button>
         <p class="status-msg" id="uploadStatus"></p>
+
+        <!-- 检测依据 — 全宽区块，检测后展示 -->
+        <details class="explain-section explain-section--fw" id="explainSection" hidden>
+          <summary class="explain-toggle">📝 检测依据</summary>
+          <div class="explain-body" id="explainBody">
+            <div class="explain-level" id="explainLevel"></div>
+            <p class="explain-summary" id="explainSummary"></p>
+            <ul class="explain-clues" id="explainClues"></ul>
+            <p class="explain-disclaimer" id="explainDisclaimer"></p>
+          </div>
+        </details>
       </div>
 
       <div class="tab-pane" id="tab-url" role="tabpanel">
@@ -133,10 +136,79 @@
           <button class="btn-url" id="btnUrl">抓取并检测</button>
         </div>
         <p class="status-msg" id="urlStatus"></p>
-        <div class="gallery" id="gallery"></div>
+
+        <!-- 新闻摘要区域 -->
+        <div class="url-summary-panel" id="urlSummaryPanel" hidden>
+          <div class="url-summary-header">
+            <span class="url-summary-icon">📰</span>
+            <div>
+              <h3 class="url-summary-title" id="urlPageTitle">新闻标题</h3>
+              <p class="url-summary-text" id="urlPageSummary">新闻摘要内容</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 多维分析面板 -->
+        <div class="url-analysis-layout" id="urlAnalysisLayout" hidden>
+          <div class="url-gallery-col">
+            <div class="gallery" id="gallery"></div>
+          </div>
+          <div class="url-stats-panel" id="urlStatsPanel">
+            <!-- 总体评分 -->
+            <div class="url-score-wrap">
+              <span class="stats-label">综合可信度评分</span>
+              <div class="url-score-circle" id="urlScoreCircle">
+                <svg viewBox="0 0 100 100" class="url-score-svg" width="80" height="80">
+                  <circle cx="50" cy="50" r="44" class="url-score-bg"/>
+                  <circle cx="50" cy="50" r="44" class="url-score-fg" id="urlScoreArc" stroke-dasharray="0 277"/>
+                </svg>
+                <span class="url-score-value" id="urlScoreValue">--</span>
+              </div>
+            </div>
+            <!-- 多维雷达图 -->
+            <div class="stats-radar-title">多维度分析</div>
+            <div id="urlRadarChart" style="width:100%;height:240px;"></div>
+            <!-- 图文一致性 -->
+            <div class="url-consistency-wrap">
+              <span class="stats-label">图文一致性</span>
+              <div class="url-consistency-bar">
+                <div class="url-consistency-fill" id="urlConsistencyBar"></div>
+              </div>
+              <span class="url-consistency-text" id="urlConsistencyText">--</span>
+            </div>
+            <!-- 分类统计 -->
+            <div class="stats-radar-title">内容分类</div>
+            <div class="stats-cats" id="urlCatTags"></div>
+            <!-- 统计数据 -->
+            <div class="url-stats-counts">
+              共 <span id="urlStatsTotal">0</span> 张 ·
+              真实 <span class="stats-real" id="urlStatsReal">0</span> 张 ·
+              AI生成 <span class="stats-fake" id="urlStatsFake">0</span> 张
+            </div>
+          </div>
+        </div>
+
+        <!-- 快速操作工具栏 -->
+        <div class="url-quick-actions" id="urlQuickActions" hidden>
+          <button class="quick-action-btn" id="btnUrlShare">
+            <span>🔗</span> 分享链接
+          </button>
+          <button class="quick-action-btn" id="btnUrlScrollTop">
+            <span>⬆</span> 回到顶部
+          </button>
+        </div>
+
+        <!-- 汇总报告 -->
         <div class="report-section" id="reportSection" hidden>
-          <h3 class="report-title">汇总报告</h3>
+          <div class="report-section-header">
+            <h3 class="report-title">📊 可视化检测报告</h3>
+            <div class="report-btn-row">
+              <button class="btn-report" id="btnUrlExportPdf">📄 导出PDF</button>
+            </div>
+          </div>
           <div class="report-body" id="reportBody"></div>
+          <!-- 报告维度总结 -->
+          <div class="report-dimensions" id="reportDimensions"></div>
         </div>
       </div>
 
@@ -277,7 +349,77 @@
     </div>
   </div>
 
+  <!-- ── 管理后台面板（嵌入式） ──────────────────────────────── -->
+  <div class="modal-overlay" id="adminPanelModal" hidden>
+    <div class="admin-panel-modal">
+      <div class="admin-panel-header">
+        <h2>🛡️ 管理后台</h2>
+        <div class="admin-panel-tabs">
+          <button class="admin-tab-btn active" data-admin-tab="dashboard">仪表盘</button>
+          <button class="admin-tab-btn" data-admin-tab="users">用户管理</button>
+          <button class="admin-tab-btn" data-admin-tab="detections">检测记录</button>
+          <button class="admin-tab-btn" data-admin-tab="feedback">误判反馈</button>
+        </div>
+        <button class="modal-close" id="btnAdminPanelClose">✕</button>
+      </div>
+      <div class="admin-panel-body">
+        <!-- 仪表盘 -->
+        <div class="admin-pane active" id="admin-dashboard">
+          <div class="admin-stats-grid" id="adminStatsCards"></div>
+          <div class="admin-chart-card">
+            <h3>📈 近7天检测量趋势</h3>
+            <canvas id="adminDailyChart" height="200"></canvas>
+          </div>
+          <div class="admin-chart-card">
+            <h3>🔥 Top 5 来源</h3>
+            <canvas id="adminSceneChart" height="200"></canvas>
+          </div>
+        </div>
+        <!-- 用户管理 -->
+        <div class="admin-pane" id="admin-users">
+          <div class="admin-filter-row">
+            <input class="admin-search-input" id="adminUsersSearch" placeholder="🔍 搜索用户名…" autocomplete="off" />
+            <select class="admin-filter-select" id="adminUsersRoleFilter">
+              <option value="">全部角色</option>
+              <option value="admin">管理员</option>
+              <option value="auditor">审核员</option>
+              <option value="user">普通用户</option>
+            </select>
+            <span class="admin-total-hint" id="adminUsersTotal"></span>
+          </div>
+          <div class="admin-table-wrap" id="adminUsersTable"></div>
+          <div class="admin-pagination" id="adminUsersPagination"></div>
+        </div>
+        <!-- 检测记录 -->
+        <div class="admin-pane" id="admin-detections">
+          <div class="admin-filter-row">
+            <input class="admin-search-input" id="adminDetectionsSearch" placeholder="🔍 搜索来源 URL…" autocomplete="off" />
+            <select class="admin-filter-select" id="adminDetectionsLabelFilter">
+              <option value="">全部结果</option>
+              <option value="FAKE">AI生成</option>
+              <option value="REAL">真实</option>
+            </select>
+            <span class="admin-total-hint" id="adminDetectionsTotal"></span>
+          </div>
+          <div class="admin-table-wrap" id="adminDetectionsTable"></div>
+          <div class="admin-pagination" id="adminDetectionsPagination"></div>
+        </div>
+        <!-- 误判反馈 -->
+        <div class="admin-pane" id="admin-feedback">
+          <div class="admin-filter-row">
+            <span class="admin-total-hint" id="adminFeedbackTotal"></span>
+            <button class="admin-btn-action" id="btnIntegrateTraining">📦 集成到训练集</button>
+            <span id="integrateStatus" style="font-size:0.82rem;color:#8b90a0;"></span>
+          </div>
+          <div class="admin-table-wrap" id="adminFeedbackTable"></div>
+          <div class="admin-pagination" id="adminFeedbackPagination"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=4"></script>
 </body>
 </html>

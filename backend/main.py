@@ -20,7 +20,8 @@ from starlette.requests import Request
 from backend.cache import close_redis
 from backend.database import Base, engine
 from backend.exceptions import register_exception_handlers
-from backend.routers import auth, detect, report, ws
+from backend.models.feedback import FeedbackRecord as _FeedbackRecord  # noqa: F401 — registers table
+from backend.routers import auth, detect, report, admin, ws, feedback
 
 # ---------------------------------------------------------------------------
 # Base directory
@@ -63,7 +64,9 @@ register_exception_handlers(app)
 app.include_router(detect.router)
 app.include_router(auth.router)
 app.include_router(report.router)
+app.include_router(admin.router)
 app.include_router(ws.router)
+app.include_router(feedback.router)
 
 # Static files & templates
 _static_dir = os.path.join(BASE_DIR, "static")

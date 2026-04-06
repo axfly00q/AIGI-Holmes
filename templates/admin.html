@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIGI-Holmes 后台管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fb;
+            color: #1e293b;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 1.5rem; }
+        .nav { display: flex; gap: 1.5rem; align-items: center; }
+        .nav a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .nav a:hover, .nav a.active { background: rgba(255,255,255,0.2); color: white; }
+        .logout-btn {
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-number { font-size: 2.5rem; font-weight: bold; color: #2a5298; }
+        .stat-label { color: #64748b; margin-top: 0.5rem; }
+        .chart-card {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .chart-card h3 { margin-bottom: 1rem; }
+        .table-container {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; font-weight: 600; }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-admin { background: #dc2626; color: white; }
+        .badge-auditor { background: #f59e0b; color: white; }
+        .badge-user { background: #10b981; color: white; }
+        .badge-fake { background: #ef4444; color: white; }
+        .badge-real { background: #22c55e; color: white; }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .page-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .page-btn.active { background: #2a5298; color: white; border-color: #2a5298; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 AIGI-Holmes 后台管理</h1>
+        <div class="nav">
+            <a class="active" data-tab="dashboard">仪表盘</a>
+            <a data-tab="users">用户管理</a>
+            <a data-tab="detections">检测记录</a>
+            <button class="logout-btn" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="dashboard-tab">
+            <div class="stats-grid" id="stats-cards"></div>
+            <div class="chart-card">
+                <h3>📈 近7天检测量趋势</h3>
+                <canvas id="dailyChart" height="200"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>🔥 造假率 Top 5 来源</h3>
+                <canvas id="sceneChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <div id="users-tab" style="display: none;">
+            <div class="table-container">
+                <h3>👥 用户列表</h3>
+                <div id="users-table"></div>
+                <div id="users-pagination" class="pagination"></div>
+            </div>
+        </div>
+
+        <div id="detections-tab" style="display: none;">
+            <div class="table-container">
+                <h3>📋 检测记录</h3>
+                <div id="detections-table"></div>
+                <div id="detections-pagination" class="pagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dailyChart = null;
+        let sceneChart = null;
+        let currentUserPage = 1;
+        let currentDetPage = 1;
+
+        /* ── Auth helpers ─────────────────────────────────────── */
+        function getToken() { return localStorage.getItem('aigi_token'); }
+        function authHeaders() {
+            const t = getToken();
+            return t ? { 'Authorization': 'Bearer ' + t } : {};
+        }
+        function checkAdminAccess() {
+            const raw = localStorage.getItem('aigi_user');
+            if (!raw) { window.location.href = '/'; return false; }
+            try {
+                const u = JSON.parse(raw);
+                if (u.role !== 'admin') { alert('权限不足，需要 admin 角色。'); window.location.href = '/'; return false; }
+            } catch (_) { window.location.href = '/'; return false; }
+            return true;
+        }
+        if (!checkAdminAccess()) { /* stop */ }
+        function logout() {
+            localStorage.removeItem('aigi_token');
+            localStorage.removeItem('aigi_user');
+            window.location.href = '/';
+        }
+        
+        async function loadDashboard() {
+            try {
+                const res = await fetch('/api/admin/stats', { headers: authHeaders() });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                
+                document.getElementById('stats-cards').innerHTML = `
+                    <div class="stat-card"><div class="stat-number">${data.total_users}</div><div class="stat-label">总用户数</div></div>
+                    <div class="stat-card"><div class="stat-number">${data.total_detections}</div><div class="stat-label">总检测数</div></div>
+                    <div class="stat-card"><div class="stat-number">${data.today_detections}</div><div class="stat-label">今日检测</div></div>
+                `;
+                
+                if (data.daily_stats && data.daily_stats.length > 0) {
+                    const ctx = document.getElementById('dailyChart').getContext('2d');
+                    if (dailyChart) dailyChart.destroy();
+                    dailyChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.daily_stats.map(d => d.date),
+                            datasets: [{
+                                label: '检测次数',
+                                data: data.daily_stats.map(d => d.count),
+                                borderColor: '#2a5298',
+                                backgroundColor: 'rgba(42, 82, 152, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            }]
+                        }
+                    });
+                }
+                
+                if (data.top_fake_scenes && data.top_fake_scenes.length > 0) {
+                    const sceneCtx = document.getElementById('sceneChart').getContext('2d');
+                    if (sceneChart) sceneChart.destroy();
+                    sceneChart = new Chart(sceneCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.top_fake_scenes.map(s => s.source),
+                            datasets: [{
+                                label: '造假率 (%)',
+                                data: data.top_fake_scenes.map(s => s.fake_rate),
+                                backgroundColor: '#ef4444'
+                            }]
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+                document.getElementById('stats-cards').innerHTML = '<div class="stat-card">加载失败</div>';
+            }
+        }
+
+        async function loadUsers(page = 1) {
+            try {
+                const res = await fetch(`/api/admin/users?page=${page}&page_size=10`, { headers: authHeaders() });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                currentUserPage = page;
+                
+                const roleBadge = (r) => {
+                    if (r === 'admin') return '<span class="badge badge-admin">管理员</span>';
+                    if (r === 'auditor') return '<span class="badge badge-auditor">审核员</span>';
+                    return '<span class="badge badge-user">普通用户</span>';
+                };
+                
+                document.getElementById('users-table').innerHTML = `
+                    <table>
+                        <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>注册时间</th></tr></thead>
+                        <tbody>
+                            ${data.users.map(u => `
+                                <tr>
+                                    <td>${u.id}</td>
+                                    <td>${u.username}</td>
+                                    <td>${roleBadge(u.role)}</td>
+                                    <td>${new Date(u.created_at).toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                const totalPages = Math.ceil(data.total / 10);
+                let pagesHtml = '';
+                for (let i = 1; i <= Math.min(totalPages, 10); i++) {
+                    pagesHtml += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadUsers(${i})">${i}</button>`;
+                }
+                document.getElementById('users-pagination').innerHTML = pagesHtml;
+            } catch (e) {
+                console.error(e);
+                document.getElementById('users-table').innerHTML = '<p>加载失败</p>';
+            }
+        }
+
+        async function loadDetections(page = 1) {
+            try {
+                const res = await fetch(`/api/admin/detections?page=${page}&page_size=10`, { headers: authHeaders() });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                currentDetPage = page;
+                
+                document.getElementById('detections-table').innerHTML = `
+                    <table>
+                        <thead><tr><th>ID</th><th>用户ID</th><th>图片来源</th><th>结果</th><th>置信度</th><th>时间</th></tr></thead>
+                        <tbody>
+                            ${data.detections.map(d => `
+                                <tr>
+                                    <td>${d.id}</td>
+                                    <td>${d.user_id || '未登录'}</td>
+                                    <td title="${d.image_url || ''}">${d.image_url || '本地上传'}</td>
+                                    <td><span class="badge ${d.label === 'FAKE' ? 'badge-fake' : 'badge-real'}">${d.label === 'FAKE' ? 'AI生成' : '真实'}</span></td>
+                                    <td>${d.confidence}%</td>
+                                    <td>${new Date(d.created_at).toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                const totalPages = Math.ceil(data.total / 10);
+                let pagesHtml = '';
+                for (let i = 1; i <= Math.min(totalPages, 10); i++) {
+                    pagesHtml += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadDetections(${i})">${i}</button>`;
+                }
+                document.getElementById('detections-pagination').innerHTML = pagesHtml;
+            } catch (e) {
+                console.error(e);
+                document.getElementById('detections-table').innerHTML = '<p>加载失败</p>';
+            }
+        }
+
+        // 标签页切换
+        document.querySelectorAll('.nav a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tab = link.dataset.tab;
+                document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+                link.classList.add('active');
+                document.getElementById('dashboard-tab').style.display = tab === 'dashboard' ? 'block' : 'none';
+                document.getElementById('users-tab').style.display = tab === 'users' ? 'block' : 'none';
+                document.getElementById('detections-tab').style.display = tab === 'detections' ? 'block' : 'none';
+                
+                if (tab === 'dashboard') loadDashboard();
+                if (tab === 'users') loadUsers(1);
+                if (tab === 'detections') loadDetections(1);
+            });
+        });
+
+        loadDashboard();
+    </script>
+</body>
+</html>

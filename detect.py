@@ -298,6 +298,79 @@ _IMG_URL_RE = re.compile(
 )
 
 
+class _TextContentParser(HTMLParser):
+    """HTML parser that extracts visible text content and page title."""
+
+    _SKIP_TAGS = frozenset({"script", "style", "noscript", "iframe", "svg", "head"})
+
+    def __init__(self):
+        super().__init__()
+        self.texts: list[str] = []
+        self.title: str = ""
+        self._skip_depth: int = 0
+        self._in_title: bool = False
+        self._title_parts: list[str] = []
+        # og:title / og:description from meta tags
+        self.og_title: str = ""
+        self.og_description: str = ""
+
+    def handle_starttag(self, tag, attrs):
+        tag_lower = tag.lower()
+        if tag_lower in self._SKIP_TAGS:
+            self._skip_depth += 1
+        if tag_lower == "title":
+            self._in_title = True
+        # Extract meta og:title/og:description
+        if tag_lower == "meta":
+            attr_dict = dict(attrs)
+            prop = (attr_dict.get("property", "") or attr_dict.get("name", "")).lower()
+            content = attr_dict.get("content", "")
+            if prop == "og:title" and content:
+                self.og_title = content.strip()
+            elif prop in ("og:description", "description") and content:
+                self.og_description = content.strip()
+
+    def handle_endtag(self, tag):
+        tag_lower = tag.lower()
+        if tag_lower in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+        if tag_lower == "title":
+            self._in_title = False
+            self.title = "".join(self._title_parts).strip()
+
+    def handle_data(self, data):
+        if self._in_title:
+            self._title_parts.append(data)
+        if self._skip_depth == 0:
+            text = data.strip()
+            if text and len(text) > 1:
+                self.texts.append(text)
+
+    def get_article_text(self) -> str:
+        """Return concatenated visible text, deduplicated and filtered."""
+        seen: set[str] = set()
+        result: list[str] = []
+        for t in self.texts:
+            if t not in seen and len(t) > 4:
+                seen.add(t)
+                result.append(t)
+        return "\n".join(result)
+
+    def get_title(self) -> str:
+        return self.og_title or self.title or ""
+
+    def get_summary(self) -> str:
+        """Simple extractive summary: first ~300 chars of substantial text."""
+        desc = self.og_description
+        if desc and len(desc) > 20:
+            return desc[:300]
+        article = self.get_article_text()
+        # Pick sentences that look like article content (longer lines)
+        sentences = [s for s in article.split("\n") if len(s) > 15]
+        summary = "。".join(sentences[:5])
+        return summary[:300] if summary else article[:300]
+
+
 class _ImgSrcParser(HTMLParser):
     """HTML parser that collects image URLs from <img>, <source>, and <meta> tags."""
 
@@ -416,8 +489,11 @@ def download_image(url: str) -> Image.Image | None:
 # Async variants (httpx) — used by the FastAPI backend
 # ---------------------------------------------------------------------------
 
-async def async_fetch_image_urls(page_url: str) -> list[str]:
-    """Same as fetch_image_urls but uses httpx for async HTTP."""
+async def async_fetch_page_content(page_url: str) -> dict:
+    """Fetch a page and return image URLs + extracted text content.
+
+    Returns dict with keys: img_urls, title, summary, article_text
+    """
     validate_public_url(page_url)
     async with httpx.AsyncClient(headers=_HEADERS, timeout=15, follow_redirects=True) as client:
         try:
@@ -431,12 +507,14 @@ async def async_fetch_image_urls(page_url: str) -> list[str]:
             raise ValueError(f"页面请求失败（HTTP {exc.response.status_code}）。")
 
     html_text = resp.text
-    parser = _ImgSrcParser()
-    parser.feed(html_text)
+
+    # Parse images
+    img_parser = _ImgSrcParser()
+    img_parser.feed(html_text)
 
     urls: list[str] = []
     seen: set[str] = set()
-    for src in parser.srcs:
+    for src in img_parser.srcs:
         if src.startswith("data:"):
             continue
         full = urljoin(page_url, src)
@@ -446,7 +524,6 @@ async def async_fetch_image_urls(page_url: str) -> list[str]:
         if len(urls) >= _MAX_IMAGES:
             break
 
-    # Regex fallback: 抓取内嵌在 JS/JSON 里的图片 URL
     if len(urls) < _MAX_IMAGES:
         for raw_url in _IMG_URL_RE.findall(html_text):
             if raw_url not in seen:
@@ -455,7 +532,22 @@ async def async_fetch_image_urls(page_url: str) -> list[str]:
             if len(urls) >= _MAX_IMAGES:
                 break
 
-    return urls
+    # Parse text content
+    text_parser = _TextContentParser()
+    text_parser.feed(html_text)
+
+    return {
+        "img_urls": urls,
+        "title": text_parser.get_title(),
+        "summary": text_parser.get_summary(),
+        "article_text": text_parser.get_article_text()[:2000],
+    }
+
+
+async def async_fetch_image_urls(page_url: str) -> list[str]:
+    """Same as fetch_image_urls but uses httpx for async HTTP."""
+    content = await async_fetch_page_content(page_url)
+    return content["img_urls"]
 
 
 async def async_download_image(url: str) -> Image.Image | None:

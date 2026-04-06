@@ -25,12 +25,13 @@ from detect import (
     MODEL_VERSION,
     async_download_image,
     async_fetch_image_urls,
+    async_fetch_page_content,
     detect_batch,
     detect_image,
     validate_public_url,
 )
 from detect_text import extract_images_from_file
-from backend.clip_classify import classify_image
+from backend.clip_classify import classify_image, classify_text_image_consistency
 
 router = APIRouter(prefix="/api", tags=["detection"])
 
@@ -73,11 +74,17 @@ class UrlResultItem(BaseModel):
     confidence: float
     probs: list[ProbItem]
     thumbnail: str
+    category: str | None = None
+    consistency: dict | None = None
 
 
 class DetectUrlResponse(BaseModel):
     count: int
     results: list[UrlResultItem]
+    page_title: str | None = None
+    page_summary: str | None = None
+    overall_score: float | None = None
+    dimensions: dict | None = None
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
@@ -162,20 +169,43 @@ async def api_detect_url(
         raise ImageFormatError("请输入有效的新闻页面 URL（以 http 或 https 开头）。")
 
     try:
-        img_urls = await async_fetch_image_urls(url)
+        page_content = await async_fetch_page_content(url)
     except ValueError as exc:
         raise ImageFormatError(str(exc))
+
+    img_urls = page_content["img_urls"]
+    page_title = page_content.get("title", "")
+    page_summary = page_content.get("summary", "")
+    article_text = page_content.get("article_text", "")
 
     if not img_urls:
         raise ImageFormatError("未在页面中找到图片（尝试直接上传图片）。")
 
     results: list[dict] = []
+    consistency_scores: list[float] = []
+    category_counts: dict[str, int] = {}
+    total_confidence: float = 0
+    fake_count: int = 0
+
     for i, img_url in enumerate(img_urls, 1):
         img = await async_download_image(img_url)
         if img is None:
             continue
 
         det = await _run_detect(img)
+
+        # CLIP classification
+        loop = asyncio.get_running_loop()
+        category = await loop.run_in_executor(None, classify_image, img)
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+        # Text-image consistency
+        consistency = None
+        if article_text:
+            consistency = await loop.run_in_executor(
+                None, classify_text_image_consistency, img, page_summary or article_text[:200]
+            )
+            consistency_scores.append(consistency["score"])
 
         # thumbnail
         buf = io.BytesIO()
@@ -193,8 +223,13 @@ async def api_detect_url(
             "probs": [{**p, "score": round(p["score"], 1)} for p in det["probs"]],
             "explanation": det.get("explanation"),
             "thumbnail": f"data:image/jpeg;base64,{b64}",
+            "category": category,
+            "consistency": consistency,
         }
         results.append(item)
+        total_confidence += det["confidence"]
+        if det["label"] == "FAKE":
+            fake_count += 1
 
         # persist
         img_bytes = io.BytesIO()
@@ -204,7 +239,32 @@ async def api_detect_url(
     if not results:
         raise ImageFormatError("下载图片失败，请检查网络或尝试直接上传图片。")
 
-    return {"count": len(results), "results": results}
+    # Calculate overall dimensions
+    n = len(results)
+    avg_confidence = round(total_confidence / n, 1) if n else 0
+    avg_consistency = round(sum(consistency_scores) / len(consistency_scores), 1) if consistency_scores else 50
+    real_ratio = round((n - fake_count) / n * 100, 1) if n else 0
+
+    dimensions = {
+        "authenticity": real_ratio,
+        "confidence": avg_confidence,
+        "consistency": avg_consistency,
+        "image_count": n,
+        "fake_count": fake_count,
+        "real_count": n - fake_count,
+        "categories": category_counts,
+    }
+
+    overall_score = round((real_ratio * 0.4 + avg_confidence * 0.3 + avg_consistency * 0.3), 1)
+
+    return {
+        "count": n,
+        "results": results,
+        "page_title": page_title,
+        "page_summary": page_summary,
+        "overall_score": overall_score,
+        "dimensions": dimensions,
+    }
 
 
 @router.post("/detect-batch")

@@ -467,6 +467,12 @@ details[open] > .explain-toggle::before {
   margin-top: 4px;
 }
 
+/* Full-width explain section (placed below the upload grid) */
+.explain-section--fw {
+  margin-top: 14px;
+}
+.explain-section--fw[hidden] { display: none; }
+
 /* ── Detect button ─────────────────────────────────────────── */
 .btn-detect {
   display: block;
@@ -571,6 +577,14 @@ details[open] > .explain-toggle::before {
   animation: fadeSlideIn 0.3s ease;
   display: flex;
   flex-direction: column;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  cursor: pointer;
+}
+
+.gallery-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-color: #3e4454;
 }
 
 .gallery-card__img {
@@ -1141,3 +1155,589 @@ details[open] > .explain-toggle::before {
   .batch-source-gallery { grid-template-columns: 1fr; }
 }
 
+/* ============================================================
+   URL Detection — News summary panel
+   ============================================================ */
+.url-summary-panel {
+  background: #1e2028;
+  border: 1px solid #2e3340;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-top: 20px;
+  animation: fadeSlideIn 0.3s ease;
+}
+.url-summary-panel[hidden] { display: none; }
+
+.url-summary-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.url-summary-icon {
+  font-size: 2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.url-summary-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e4e6ed;
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.url-summary-text {
+  font-size: 0.88rem;
+  color: #8b90a0;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ============================================================
+   URL Detection — Multi-dimensional analysis layout
+   ============================================================ */
+.url-analysis-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  margin-top: 20px;
+}
+.url-analysis-layout[hidden] { display: none; }
+
+.url-gallery-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Responsive auto-fill grid for URL gallery */
+.url-gallery-col .gallery {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 0;
+}
+
+.url-stats-panel {
+  width: 290px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 80px;
+  background: #1e2028;
+  border: 1px solid #2e3340;
+  border-radius: 12px;
+  padding: 20px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Score circle */
+.url-score-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.url-score-circle {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.url-score-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 80px;
+  transform: rotate(-90deg);
+}
+
+.url-score-bg {
+  fill: none;
+  stroke: #272b35;
+  stroke-width: 6;
+}
+
+.url-score-fg {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dasharray 1s ease, stroke 0.4s;
+}
+
+.url-score-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #22c55e;
+  transition: color 0.4s;
+  z-index: 1;
+  line-height: 1;
+}
+
+/* Consistency bar */
+.url-consistency-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.url-consistency-bar {
+  background: #272b35;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.url-consistency-fill {
+  height: 100%;
+  border-radius: 999px;
+  width: 0%;
+  transition: width 0.7s ease, background 0.4s;
+  background: #22c55e;
+}
+
+.url-consistency-text {
+  font-size: 0.82rem;
+  color: #8b90a0;
+  text-align: right;
+}
+
+.url-stats-counts {
+  font-size: 0.82rem;
+  color: #8b90a0;
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid #2e3340;
+}
+
+/* Gallery card enhancements */
+.gallery-card__top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gallery-card__cat {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  background: #272b35;
+  color: #8b90a0;
+  border: 1px solid #2e3340;
+}
+
+.gallery-card__consistency {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: #8b90a0;
+}
+
+.consistency-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Report — visual dimensions
+   ============================================================ */
+.report-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #2e3340;
+}
+
+.report-section-header .report-title {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.report-section-header .report-btn-row {
+  margin: 0;
+}
+
+.report-dimensions {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #2e3340;
+}
+
+.report-dim-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.report-dim-item {
+  background: #272b35;
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.report-dim-label {
+  display: block;
+  font-size: 0.78rem;
+  color: #8b90a0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.report-dim-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e4e6ed;
+}
+
+.report-conclusion {
+  background: #272b35;
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-size: 0.88rem;
+  color: #c0c4d0;
+  line-height: 1.7;
+}
+
+.report-conclusion strong {
+  color: #e4e6ed;
+}
+
+/* ============================================================
+   Admin panel — embedded modal
+   ============================================================ */
+
+/* F1: URL tab quick-action toolbar */
+.url-quick-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.url-quick-actions[hidden] { display: none; }
+
+.quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  background: #272b35;
+  border: 1px solid #2e3340;
+  color: #c0c4d0;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.quick-action-btn:hover {
+  background: #2e3340;
+  border-color: #ff6b00;
+  color: #e4e6ed;
+}
+
+/* F4: Admin filter row */
+.admin-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-search-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 7px 12px;
+  background: #272b35;
+  border: 1px solid #2e3340;
+  border-radius: 8px;
+  color: #c0c4d0;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-search-input:focus { border-color: #ff6b00; }
+
+.admin-filter-select {
+  padding: 7px 10px;
+  background: #272b35;
+  border: 1px solid #2e3340;
+  border-radius: 8px;
+  color: #c0c4d0;
+  font-size: 0.88rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-filter-select:focus { border-color: #ff6b00; }
+
+.admin-total-hint {
+  font-size: 0.82rem;
+  color: #8b90a0;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.admin-pagination .page-ellipsis {
+  color: #8b90a0;
+  padding: 0 4px;
+  line-height: 30px;
+}
+
+.admin-pagination .page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.admin-panel-modal {
+  background: #1e2028;
+  border: 1px solid #2e3340;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 1100px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fadeSlideIn 0.25s ease;
+}
+
+.admin-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid #2e3340;
+  background: linear-gradient(135deg, #1a1d2e 0%, #1e2028 100%);
+  flex-shrink: 0;
+}
+
+.admin-panel-header h2 {
+  font-size: 1.15rem;
+  color: #e4e6ed;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.admin-panel-tabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.admin-tab-btn {
+  background: none;
+  border: none;
+  padding: 7px 16px;
+  font-size: 0.88rem;
+  color: #8b90a0;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.admin-tab-btn:hover { background: #272b35; color: #e4e6ed; }
+.admin-tab-btn.active { background: #ff6b00; color: #fff; }
+
+.admin-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.admin-pane { display: none; }
+.admin-pane.active { display: block; animation: fadeSlideIn 0.2s ease; }
+
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.admin-stat-card {
+  background: #272b35;
+  border: 1px solid #2e3340;
+  border-radius: 12px;
+  padding: 18px 16px;
+  text-align: center;
+}
+
+.admin-stat-num {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+.admin-stat-label {
+  font-size: 0.82rem;
+  color: #8b90a0;
+  margin-top: 6px;
+}
+
+.admin-chart-card {
+  background: #272b35;
+  border: 1px solid #2e3340;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.admin-chart-card h3 {
+  font-size: 0.95rem;
+  color: #c0c4d0;
+  margin: 0 0 12px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2e3340;
+  color: #c0c4d0;
+}
+
+.admin-table th {
+  background: #272b35;
+  color: #8b90a0;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-table tr:hover td {
+  background: #272b35;
+}
+
+.admin-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.admin-badge--admin { background: #2a1555; color: #a78bfa; }
+.admin-badge--auditor { background: #0f2a1e; color: #34d399; }
+.admin-badge--user { background: #272b35; color: #8b90a0; }
+.admin-badge--fake { background: #3d1a1a; color: #f87171; }
+.admin-badge--real { background: #0f2a1b; color: #4ade80; }
+
+.admin-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.admin-pagination .page-btn {
+  padding: 6px 12px;
+  border: 1px solid #2e3340;
+  background: #272b35;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #8b90a0;
+  font-size: 0.82rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.admin-pagination .page-btn:hover {
+  background: #2e3340;
+  color: #e4e6ed;
+}
+
+.admin-pagination .page-btn.active {
+  background: #ff6b00;
+  color: #fff;
+  border-color: #ff6b00;
+}
+
+/* ============================================================
+   Responsive overrides for new components
+   ============================================================ */
+@media (max-width: 860px) {
+  .url-analysis-layout { flex-direction: column; }
+  .url-stats-panel { width: 100%; position: static; }
+  .admin-stats-grid { grid-template-columns: 1fr; }
+  .admin-panel-modal { width: 95%; max-height: 90vh; }
+  .admin-panel-header { flex-wrap: wrap; }
+  .report-dim-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 540px) {
+  .report-dim-grid { grid-template-columns: 1fr; }
+  .admin-panel-tabs { flex-wrap: wrap; }
+}
+
+/* ============================================================
+   Feedback badges & action button (v4)
+   ============================================================ */
+.admin-badge--trained { background: #0d2a1a; color: #34d399; }
+.admin-badge--pending { background: #2a1e0a; color: #fbbf24; }
+
+/* Small icon-button for per-row image stats */
+.admin-stats-btn {
+  background: transparent;
+  border: 1px solid #2e3340;
+  color: #60a5fa;
+  border-radius: 5px;
+  padding: 2px 7px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  transition: background 0.15s, border-color 0.15s;
+}
+.admin-stats-btn:hover {
+  background: #1e2a3a;
+  border-color: #60a5fa;
+}
+
+/* Compact action button for admin filter-row (e.g. "集成到训练集") */
+.admin-btn-action {
+  padding: 5px 14px;
+  font-size: 0.83rem;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  background: transparent;
+  color: #60a5fa;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.admin-btn-action:hover { background: #1e2a3a; }
+.admin-btn-action:disabled { opacity: 0.5; cursor: not-allowed; }

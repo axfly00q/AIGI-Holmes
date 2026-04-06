@@ -9,6 +9,7 @@ function setStatus(el, msg, type) {
 function spinnerHTML() { return '<span class="spinner"></span>'; }
 
 const AUTH_KEY      = 'aigi_token';
+const AUTH_REFRESH_KEY = 'aigi_refresh';
 const AUTH_USER_KEY = 'aigi_user';
 
 function getToken() { return localStorage.getItem(AUTH_KEY); }
@@ -18,11 +19,13 @@ function authHeaders() {
 }
 function saveAuth(tokens, username, role) {
   localStorage.setItem(AUTH_KEY, tokens.access_token);
+  if (tokens.refresh_token) localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
   localStorage.setItem(AUTH_USER_KEY, JSON.stringify({ username, role }));
   updateAuthBar();
 }
 function clearAuth() {
   localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem(AUTH_REFRESH_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
   updateAuthBar();
 }
@@ -37,15 +40,18 @@ function updateAuthBar() {
     badge.textContent = u.role;
     badge.className   = 'auth-role-badge role-' + u.role;
     $('btnShowRole').hidden = false;
+    $('btnAdminPanel').hidden = (u.role !== 'admin');
   } else {
     $('authGuest').hidden = false;
     $('authUser').hidden  = true;
+    $('btnAdminPanel').hidden = true;
   }
   updateBatchAccess();
   if (!raw && $('reportDownload')) $('reportDownload').hidden = true;
 }
 
 $('btnShowLogin').addEventListener('click',  () => { $('loginModal').hidden = false; });
+$('btnAdminPanel').addEventListener('click', () => { openAdminPanel(); });
 $('btnModalClose').addEventListener('click', () => { $('loginModal').hidden = true;  });
 $('btnLogout').addEventListener('click',     () => { clearAuth(); });
 
@@ -149,7 +155,27 @@ $('btnRoleChange').addEventListener('click', async () => {
       const rawUser = localStorage.getItem(AUTH_USER_KEY);
       if (rawUser) {
         const cu = JSON.parse(rawUser);
-        if (cu.username === d.username) { cu.role = d.role; localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu)); updateAuthBar(); }
+        if (cu.username === d.username) {
+          cu.role = d.role;
+          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu));
+          // Auto-refresh JWT so new role takes effect immediately without re-login
+          const savedRefresh = localStorage.getItem(AUTH_REFRESH_KEY);
+          if (savedRefresh) {
+            fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: savedRefresh }),
+            }).then(rr => rr.ok ? rr.json() : null).then(newTokens => {
+              if (newTokens) {
+                localStorage.setItem(AUTH_KEY, newTokens.access_token);
+                if (newTokens.refresh_token) localStorage.setItem(AUTH_REFRESH_KEY, newTokens.refresh_token);
+              }
+              updateAuthBar();
+            }).catch(() => updateAuthBar());
+          } else {
+            updateAuthBar();
+          }
+        }
       }
       $('roleTargetUser').value = '';
     }
@@ -202,6 +228,8 @@ function showPreview(file) {
 }
 
 function clearUpload() {
+  lastDetectionId = null;
+  lastDetectionLabel = '';
   selectedFile = null;
   previewImg.src = '';
   previewImg.style.display = 'none';
@@ -213,6 +241,7 @@ function clearUpload() {
   setStatus(uploadStatus, '', '');
   $('reportDownload').hidden = true;
   if($('quickActions')) $('quickActions').hidden = true;
+  const es = $('explainSection'); if (es) es.hidden = true;
   const camOvl = $('camOverlay');
   camOvl.src = ''; camOvl.classList.remove('visible');
   $('btnCamToggle').hidden = true; $('btnCamToggle').classList.remove('active');
@@ -222,6 +251,7 @@ function clearUpload() {
 function hideResultCard() {
   $('resultCard').style.display = 'none';
   $('resultEmpty').style.display = 'flex';
+  const es = $('explainSection'); if (es) es.hidden = true;
   const rp = document.querySelector('.result-panel');
   if (rp) { rp.style.alignItems = 'center'; rp.style.justifyContent = 'center'; }
 }
@@ -280,7 +310,7 @@ function renderResult(data) {
   });});
   const exp = data.explanation;
   const es = $('explainSection');
-  if(exp){
+  if(exp && es){
     const lev = $('explainLevel');
     lev.textContent=exp.level;
     lev.className='explain-level '+cls;
@@ -289,8 +319,9 @@ function renderResult(data) {
     (exp.clues||[]).forEach(x=>{const li=document.createElement('li');li.textContent=x;clist.appendChild(li);});
     clist.style.display=exp.clues?.length?'':'none';
     $('explainDisclaimer').textContent=exp.disclaimer||'';
-    es.style.display='';
-  }else{es.style.display='none';}
+    es.hidden = false;
+    es.removeAttribute('open'); // collapsed by default; user can click to expand
+  }else if(es){ es.hidden = true; }
   const cam = $('camOverlay');
   if(data.cam_image){cam.src=data.cam_image;$('btnCamToggle').hidden=false;}
   else{cam.src='';$('btnCamToggle').hidden=true;}
@@ -314,6 +345,8 @@ btnDetect.addEventListener('click', async ()=>{
       setStatus(uploadStatus,'❌ 检测失败','error');
     }else{
       renderResult(data);
+      lastDetectionId = data.detection_id || null;
+      lastDetectionLabel = data.label || '';
       setStatus(uploadStatus,'✅ 检测完成','success');
       const rd=$('reportDownload');
       if(data.detection_id&&getToken()){
@@ -342,46 +375,227 @@ const urlStatus = $('urlStatus');
 const gallery = $('gallery');
 const reportSection = $('reportSection');
 const reportBody = $('reportBody');
+let _urlRadarChart = null;
+let lastDetectionId = null;   // detection_id of the last single-image result
+let lastDetectionLabel = '';  // 'FAKE' or 'REAL'
+
+function _escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';}
 
 function buildGalleryCard(it){
   const c=it.label==='REAL'?'real':'fake';
+  const catBadge = it.category ? `<span class="gallery-card__cat">${it.category}</span>` : '';
+  const consistencyHtml = it.consistency ? `<div class="gallery-card__consistency"><span class="consistency-dot" style="background:${it.consistency.score>=60?'#22c55e':it.consistency.score>=40?'#f59e0b':'#ef4444'}"></span><span>${it.consistency.assessment} ${Math.round(it.consistency.score)}%</span></div>` : '';
   const mb=(it.probs||[]).map(p=>{
     const pc=p.label==='REAL'?'real':'fake';
     const s=Math.round(p.score);
     return `<div class="mini-row"><span class="mini-label">${p.label_zh}</span><div class="mini-track"><div class="mini-fill ${pc}" style="width:0%" data-score="${s}"></div></div><span class="mini-score">${s}%</span></div>`;
   }).join('');
-  return `<div class="gallery-card"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><span class="gallery-card__badge ${c}">${it.label_zh}</span><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p><div class="gallery-card__mini-bars">${mb}</div></div></div>`;
+  return `<div class="gallery-card"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}<div class="gallery-card__mini-bars">${mb}</div></div></div>`;
 }
 function buildReportRow(it){
   const c=it.label==='REAL'?'real':'fake';
-  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${it.label_zh}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${it.url}</span></div>`;
+  const conText = it.consistency ? ` · 图文一致性: ${it.consistency.assessment}(${Math.round(it.consistency.score)}%)` : '';
+  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.label_zh)}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}</span></div>`;
 }
 
-btnUrl.addEventListener('click',async ()=>{
+function renderUrlAnalysis(d) {
+  // Show summary panel
+  if (d.page_title || d.page_summary) {
+    $('urlPageTitle').textContent = d.page_title || '未知标题';
+    $('urlPageSummary').textContent = d.page_summary || '无法提取摘要';
+    $('urlSummaryPanel').hidden = false;
+  } else {
+    $('urlSummaryPanel').hidden = true;
+  }
+
+  // Show analysis layout
+  $('urlAnalysisLayout').hidden = false;
+
+  // Render gallery cards
+  gallery.innerHTML = d.results.map(buildGalleryCard).join('');
+  requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+    gallery.querySelectorAll('.mini-fill').forEach(x=>x.style.width=x.dataset.score+'%');
+  });});
+
+  // Render stats
+  const dim = d.dimensions || {};
+  $('urlStatsTotal').textContent = dim.image_count || d.count;
+  $('urlStatsReal').textContent = dim.real_count || 0;
+  $('urlStatsFake').textContent = dim.fake_count || 0;
+
+  // Score circle
+  const score = d.overall_score || 0;
+  const scoreEl = $('urlScoreValue');
+  scoreEl.textContent = Math.round(score);
+  const circumference = 2 * Math.PI * 44;
+  const arc = $('urlScoreArc');
+  const offset = circumference * (score / 100);
+  arc.style.strokeDasharray = `${offset} ${circumference}`;
+  arc.style.stroke = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444';
+  scoreEl.style.color = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444';
+
+  // Radar chart
+  if (!_urlRadarChart && typeof echarts !== 'undefined') {
+    _urlRadarChart = echarts.init($('urlRadarChart'), null, {renderer:'canvas'});
+  }
+  if (_urlRadarChart) {
+    _urlRadarChart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: {trigger:'item'},
+      radar: {
+        indicator: [
+          {name:'真实性', max:100},
+          {name:'置信度', max:100},
+          {name:'图文一致', max:100},
+          {name:'图片数', max:Math.max(dim.image_count || 1, 5)},
+        ],
+        shape: 'polygon',
+        axisLine: {lineStyle:{color:'#2e3340'}},
+        splitLine: {lineStyle:{color:'#2e3340'}},
+        splitArea: {areaStyle:{color:['#1e2028','#272b35']}},
+        axisName: {color:'#8b90a0', fontSize:11},
+      },
+      series: [{
+        type: 'radar',
+        data: [{
+          name: '分析结果',
+          value: [
+            dim.authenticity || 0,
+            dim.confidence || 0,
+            dim.consistency || 50,
+            dim.image_count || 0,
+          ],
+          lineStyle: {color:'#60a5fa'},
+          areaStyle: {color:'rgba(96,165,250,0.2)'},
+          itemStyle: {color:'#60a5fa'},
+        }],
+      }],
+    });
+  }
+
+  // Consistency bar
+  const conScore = dim.consistency || 50;
+  const conBar = $('urlConsistencyBar');
+  conBar.style.width = conScore + '%';
+  conBar.style.background = conScore >= 60 ? '#22c55e' : conScore >= 40 ? '#f59e0b' : '#ef4444';
+  $('urlConsistencyText').textContent = (conScore >= 60 ? '一致' : conScore >= 40 ? '部分一致' : '不一致') + ' ' + Math.round(conScore) + '%';
+
+  // Category tags
+  const cats = dim.categories || {};
+  $('urlCatTags').innerHTML = Object.entries(cats).map(([k,v]) => `<span class="cat-tag">${k} ${v}张</span>`).join('');
+
+  // Report section
+  reportBody.innerHTML = d.results.map(buildReportRow).join('');
+
+  // Report dimensions summary
+  const dimSummary = $('reportDimensions');
+  dimSummary.innerHTML = `
+    <div class="report-dim-grid">
+      <div class="report-dim-item">
+        <span class="report-dim-label">综合评分</span>
+        <span class="report-dim-value" style="color:${score>=70?'#22c55e':score>=40?'#f59e0b':'#ef4444'}">${Math.round(score)}</span>
+      </div>
+      <div class="report-dim-item">
+        <span class="report-dim-label">真实率</span>
+        <span class="report-dim-value">${Math.round(dim.authenticity||0)}%</span>
+      </div>
+      <div class="report-dim-item">
+        <span class="report-dim-label">平均置信度</span>
+        <span class="report-dim-value">${Math.round(dim.confidence||0)}%</span>
+      </div>
+      <div class="report-dim-item">
+        <span class="report-dim-label">图文一致性</span>
+        <span class="report-dim-value">${Math.round(dim.consistency||50)}%</span>
+      </div>
+    </div>
+    <div class="report-conclusion">
+      <strong>检测结论：</strong>${score>=70?'该新闻页面图片以真实内容为主，图文一致性较好，可信度较高。':score>=40?'该新闻页面存在部分可疑图片，建议进一步核实。':'该新闻页面多张图片被判定为AI生成，建议谨慎引用，必要时核实图片来源。'}
+    </div>
+  `;
+  reportSection.hidden = false;
+
+  // F1: show quick-actions toolbar
+  const _qa = $('urlQuickActions');
+  if (_qa) _qa.hidden = false;
+}
+
+btnUrl.addEventListener('click', async ()=>{
   const u=urlInput.value.trim();
   if(!u){setStatus(urlStatus,'⚠️ 请输入URL','error');return;}
   btnUrl.disabled=true;
   btnUrl.classList.add('loading');
-  btnUrl.innerHTML=spinnerHTML()+'检测中…';
+  btnUrl.innerHTML=spinnerHTML()+'抓取中…';
   gallery.innerHTML='';
   reportSection.hidden=true;
+  $('urlSummaryPanel').hidden=true;
+  $('urlAnalysisLayout').hidden=true;
+  const _qa = $('urlQuickActions'); if (_qa) _qa.hidden = true;
+  // F2: Progressive status feedback with staged messages
+  setStatus(urlStatus,'⏳ 正在抓取页面内容…','');
+  const _pt1 = setTimeout(()=>{ if(btnUrl.disabled){ btnUrl.innerHTML=spinnerHTML()+'提取图片…'; setStatus(urlStatus,'⏳ 正在识别并提取图片链接…',''); }}, 2200);
+  const _pt2 = setTimeout(()=>{ if(btnUrl.disabled){ btnUrl.innerHTML=spinnerHTML()+'AI 检测中…'; setStatus(urlStatus,'⏳ 正在进行 AI 检测分析，请稍候…',''); }}, 4800);
   try{
-    const res=await fetch('/api/detect-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u})});
+    const res=await fetch('/api/detect-url',{method:'POST',headers:{'Content-Type':'application/json',...authHeaders()},body:JSON.stringify({url:u})});
+    clearTimeout(_pt1); clearTimeout(_pt2);
     const d=await res.json();
     if(!res.ok||d.error){setStatus(urlStatus,`❌ ${d.detail||d.message||'请求失败'}`,'error');
     }else{
-      setStatus(urlStatus,`✅ 检测 ${d.count} 张`,'success');
-      gallery.innerHTML=d.results.map(buildGalleryCard).join('');
-      requestAnimationFrame(()=>{requestAnimationFrame(()=>{
-        gallery.querySelectorAll('.mini-fill').forEach(x=>x.style.width=x.dataset.score+'%');
-      });});
-      reportBody.innerHTML=d.results.map(buildReportRow).join('');
-      reportSection.hidden=false;
+      const cnt = d.count||(d.results||[]).length;
+      setStatus(urlStatus,`✅ 检测完成，共分析 ${cnt} 张图片`,'success');
+      renderUrlAnalysis(d);
     }
-  }catch(e){setStatus(urlStatus,'❌ 网络错误','error');
+  }catch(e){
+    clearTimeout(_pt1); clearTimeout(_pt2);
+    setStatus(urlStatus,'❌ 网络错误','error');
   }finally{btnUrl.classList.remove('loading');btnUrl.innerHTML='抓取并检测';btnUrl.disabled=false;}
 });
 urlInput.addEventListener('keydown',e=>{if(e.key==='Enter')btnUrl.click();});
+
+// URL export PDF - print-based
+$('btnUrlExportPdf').addEventListener('click', () => {
+  const reportEl = $('reportSection');
+  if (!reportEl) return;
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>AIGI-Holmes 检测报告</title>
+  <style>body{font-family:sans-serif;padding:20px;color:#333}
+  .report-dim-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+  .report-dim-item{background:#f5f5f5;border-radius:8px;padding:12px;text-align:center}
+  .report-dim-label{font-size:12px;color:#666;display:block}
+  .report-dim-value{font-size:22px;font-weight:700;display:block;margin-top:4px}
+  .report-row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #eee;font-size:14px}
+  .report-row__badge{padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600}
+  .report-row__badge.fake{background:#fee;color:#c00}
+  .report-row__badge.real{background:#efe;color:#060}
+  .report-conclusion{background:#f9f9f9;padding:12px;border-radius:8px;margin-top:12px;font-size:14px}
+  </style></head><body><h1>AIGI-Holmes 新闻图片检测报告</h1>`);
+  w.document.write(reportEl.innerHTML);
+  w.document.write('</body></html>');
+  w.document.close();
+  w.print();
+});
+
+// F1: URL quick-action — merged share button (copy + dialog)
+$('btnUrlShare').addEventListener('click', () => {
+  const url = urlInput.value.trim() || window.location.href;
+  // Auto-copy to clipboard silently
+  if (navigator.clipboard) { navigator.clipboard.writeText(url).catch(()=>{}); }
+  // Show share dialog with URL pre-filled
+  openActionModal(`
+    <div style="padding:20px;">
+      <h3 style="color:#e4e6ed;margin:0 0 8px;font-size:1rem;">🔗 分享检测链接</h3>
+      <p style="color:#8b90a0;font-size:0.85rem;margin:0 0 12px;">链接已自动复制到剪贴板，也可手动选择复制：</p>
+      <input type="text" value="${_escHtml(url)}" readonly
+        style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #2e3340;background:#272b35;color:#c0c4d0;font-size:0.85rem;box-sizing:border-box;"
+        onclick="this.select();" />
+      <button class="btn-detect" id="btnActionConfirm" style="margin-top:14px;width:100%;">关闭</button>
+    </div>
+  `);
+  $('btnActionConfirm').addEventListener('click', closeActionModal);
+});
+
+$('btnUrlScrollTop').addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 function updateBatchAccess(){
   const raw=localStorage.getItem(AUTH_USER_KEY);
@@ -758,18 +972,75 @@ function openActionModal(htmlContent) {
 
 // 快捷操作按钮绑定
 document.addEventListener('DOMContentLoaded',()=>{
-  // 1. 标记为误判
-  $('btnMarkMisjudge').addEventListener('click',()=>{
+  // 1. 标记为误判 — 真实反馈表单
+  $('btnMarkMisjudge').addEventListener('click', () => {
+    if (!lastDetectionId) {
+      openActionModal(`<div style="text-align:center;padding:24px">
+        <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+        <p style="color:#c0c4d0;margin:0 0 16px">无检测记录，请先对图片进行检测</p>
+        <button class="btn-detect" id="btnActionConfirm" style="width:100%">确定</button>
+      </div>`);
+      $('btnActionConfirm').addEventListener('click', closeActionModal);
+      return;
+    }
+    const detectedZh = lastDetectionLabel === 'FAKE' ? 'AI生成' : '真实照片';
+    const detectedColor = lastDetectionLabel === 'FAKE' ? '#f87171' : '#4ade80';
     openActionModal(`
-      <div style="text-align:center; padding:20px;">
-        <div style="font-size:48px; color:#28a745; margin-bottom:16px;">✅</div>
-        <h3 style="color:#fff; margin:0 0 8px 0;">操作成功</h3>
-        <p style="color:#aaa; margin:0;">已成功标记为误判</p>
-        <button class="btn-detect" id="btnActionConfirm" style="margin-top:24px;">确定</button>
+      <div style="padding:20px">
+        <h3 style="color:#e4e6ed;margin:0 0 12px;font-size:1rem">🚨 标记误判</h3>
+        <p style="color:#8b90a0;font-size:0.85rem;margin:0 0 16px">AI 判定为
+          <strong style="color:${detectedColor}">${detectedZh}</strong>，您认为实际应该是：</p>
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <label style="flex:1;border:2px solid ${lastDetectionLabel==='REAL'?'#f87171':'#2e3340'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#1e2028" id="lblFeedFake">
+            <input type="radio" name="feedLabel" value="FAKE" style="margin-right:6px"${lastDetectionLabel==='REAL'?' checked':''}>
+            <span style="color:#f87171;font-weight:600">AI生成</span>
+          </label>
+          <label style="flex:1;border:2px solid ${lastDetectionLabel==='FAKE'?'#4ade80':'#2e3340'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#1e2028" id="lblFeedReal">
+            <input type="radio" name="feedLabel" value="REAL" style="margin-right:6px"${lastDetectionLabel==='FAKE'?' checked':''}>
+            <span style="color:#4ade80;font-weight:600">真实照片</span>
+          </label>
+        </div>
+        <textarea id="feedNote" placeholder="备注（可选）：如来源说明、判断依据…"
+          style="width:100%;height:68px;padding:8px;border-radius:6px;border:1px solid #2e3340;background:#272b35;color:#c0c4d0;font-size:0.82rem;resize:none;box-sizing:border-box"
+          maxlength="200"></textarea>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn-secondary" id="btnFeedCancel" style="flex:1">取消</button>
+          <button class="btn-detect" id="btnFeedSubmit" style="flex:1">提交反馈</button>
+        </div>
+        <p id="feedError" style="color:#f87171;font-size:0.82rem;margin:8px 0 0;min-height:16px"></p>
       </div>
     `);
-    // 绑定确定按钮
-    $('btnActionConfirm').addEventListener('click', closeActionModal);
+    $('btnFeedCancel').addEventListener('click', closeActionModal);
+    $('btnFeedSubmit').addEventListener('click', async () => {
+      const btn = $('btnFeedSubmit');
+      const errEl = $('feedError');
+      const sel = document.querySelector('input[name="feedLabel"]:checked');
+      if (!sel) { errEl.textContent = '请选择正确标签'; return; }
+      const note = ($('feedNote').value || '').trim();
+      btn.disabled = true;
+      btn.textContent = '提交中…';
+      try {
+        const res = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({ detection_id: lastDetectionId, correct_label: sel.value, note }),
+        });
+        const resp = await res.json();
+        if (!res.ok) { errEl.textContent = resp.detail || '提交失败'; btn.disabled = false; btn.textContent = '提交反馈'; return; }
+        actionModalContent.innerHTML = `
+          <div style="text-align:center;padding:28px">
+            <div style="font-size:52px;margin-bottom:14px">✅</div>
+            <h3 style="color:#e4e6ed;margin:0 0 8px">感谢反馈</h3>
+            <p style="color:#8b90a0;margin:0">您的反馈将帮助改进检测准确率</p>
+            <button class="btn-detect" id="btnActionConfirm" style="margin-top:20px;width:100%">确定</button>
+          </div>`;
+        $('btnActionConfirm').addEventListener('click', closeActionModal);
+      } catch(e) {
+        errEl.textContent = '网络错误';
+        btn.disabled = false;
+        btn.textContent = '提交反馈';
+      }
+    });
   });
 
   // 2. 重新检测
@@ -806,3 +1077,368 @@ document.addEventListener('DOMContentLoaded',()=>{
     $('btnActionConfirm').addEventListener('click', closeActionModal);
   });
 });
+
+/* ============================================================
+   Admin Panel — embedded in main page
+   ============================================================ */
+let _adminDailyChart = null;
+let _adminSceneChart = null;
+
+/** Build prev/numbered/next pagination HTML inside container. */
+function _renderPagination(container, currentPage, total, pageSize, fnName) {
+  if (!container) return;
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) { container.innerHTML = ''; return; }
+  const MAX_VIS = 5;
+  let start = Math.max(1, currentPage - 2);
+  let end   = Math.min(totalPages, start + MAX_VIS - 1);
+  if (end - start < MAX_VIS - 1) start = Math.max(1, end - MAX_VIS + 1);
+  let h = `<button class="page-btn" onclick="${fnName}(${Math.max(1,currentPage-1)})" ${currentPage===1?'disabled':''}>\u2039 \u4e0a\u9875</button>`;
+  if (start > 1) h += `<button class="page-btn" onclick="${fnName}(1)">1</button>`;
+  if (start > 2) h += '<span class="page-ellipsis">…</span>';
+  for (let i = start; i <= end; i++)
+    h += `<button class="page-btn ${i===currentPage?'active':''}" onclick="${fnName}(${i})">${i}</button>`;
+  if (end < totalPages - 1) h += '<span class="page-ellipsis">…</span>';
+  if (end < totalPages) h += `<button class="page-btn" onclick="${fnName}(${totalPages})">${totalPages}</button>`;
+  h += `<button class="page-btn" onclick="${fnName}(${Math.min(totalPages,currentPage+1)})" ${currentPage===totalPages?'disabled':''}>\u4e0b\u9875 \u203a</button>`;
+  container.innerHTML = h;
+}
+
+function openAdminPanel() {
+  // Permission guard: only admin may access the panel
+  const rawUser = localStorage.getItem(AUTH_USER_KEY);
+  if (!rawUser) { $('loginModal').hidden = false; return; }
+  const u = JSON.parse(rawUser);
+  if (u.role !== 'admin') { alert('\u6743\u9650\u4e0d\u8db3\uff1a\u4ec5\u7ba1\u7406\u5458\u53ef\u8bbf\u95ee\u7ba1\u7406\u540e\u53f0'); return; }
+
+  const modal = $('adminPanelModal');
+  if (!modal) return;
+  modal.hidden = false;
+
+  document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+  const firstTab = document.querySelector('.admin-tab-btn[data-admin-tab="dashboard"]');
+  if (firstTab) firstTab.classList.add('active');
+  document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
+  const dashPane = $('admin-dashboard');
+  if (dashPane) dashPane.classList.add('active');
+  loadAdminDashboard();
+}
+
+function closeAdminPanel() {
+  $('adminPanelModal').hidden = true;
+}
+
+$('btnAdminPanelClose').addEventListener('click', closeAdminPanel);
+$('adminPanelModal').addEventListener('click', e => {
+  if (e.target === $('adminPanelModal')) closeAdminPanel();
+});
+
+// Admin tab switching
+document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.adminTab;
+    document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
+    $('admin-' + tab).classList.add('active');
+    if (tab === 'dashboard') loadAdminDashboard();
+    if (tab === 'users') loadAdminUsers(1);
+    if (tab === 'detections') loadAdminDetections(1);
+    if (tab === 'feedback') loadAdminFeedback(1);
+  });
+});
+
+// F4: Debounced search/filter bindings for admin tables
+['adminUsersSearch', 'adminUsersRoleFilter'].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(() => loadAdminUsers(1), 350); });
+});
+['adminDetectionsSearch', 'adminDetectionsLabelFilter'].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(() => loadAdminDetections(1), 350); });
+});
+
+async function loadAdminDashboard() {
+  try {
+    const res = await fetch('/api/admin/stats', { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    $('adminStatsCards').innerHTML = `
+      <div class="admin-stat-card"><div class="admin-stat-num">${data.total_users}</div><div class="admin-stat-label">总用户数</div></div>
+      <div class="admin-stat-card"><div class="admin-stat-num">${data.total_detections}</div><div class="admin-stat-label">总检测数</div></div>
+      <div class="admin-stat-card"><div class="admin-stat-num">${data.today_detections}</div><div class="admin-stat-label">今日检测</div></div>
+    `;
+
+    if (data.daily_stats && data.daily_stats.length > 0 && typeof Chart !== 'undefined') {
+      const ctx = $('adminDailyChart').getContext('2d');
+      if (_adminDailyChart) _adminDailyChart.destroy();
+      _adminDailyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.daily_stats.map(d => d.date),
+          datasets: [{
+            label: '检测次数', data: data.daily_stats.map(d => d.count),
+            borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)',
+            tension: 0.3, fill: true
+          }]
+        },
+        options: {
+          plugins: { legend: { labels: { color: '#8b90a0' } } },
+          scales: {
+            x: { ticks: { color: '#8b90a0' }, grid: { color: '#2e3340' } },
+            y: { ticks: { color: '#8b90a0' }, grid: { color: '#2e3340' } }
+          }
+        }
+      });
+    }
+
+    if (data.top_fake_scenes && data.top_fake_scenes.length > 0 && typeof Chart !== 'undefined') {
+      const ctx2 = $('adminSceneChart').getContext('2d');
+      if (_adminSceneChart) _adminSceneChart.destroy();
+      _adminSceneChart = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+          labels: data.top_fake_scenes.map(s => s.source),
+          datasets: [{
+            label: '检测量', data: data.top_fake_scenes.map(s => s.total || s.fake_rate),
+            backgroundColor: '#ef4444'
+          }]
+        },
+        options: {
+          plugins: { legend: { labels: { color: '#8b90a0' } } },
+          scales: {
+            x: { ticks: { color: '#8b90a0', maxRotation: 0, autoSkip: true }, grid: { color: '#2e3340' } },
+            y: { ticks: { color: '#8b90a0' }, grid: { color: '#2e3340' } }
+          }
+        }
+      });
+    }
+  } catch (e) {
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) {
+      clearAuth();
+      closeAdminPanel();
+      $('loginModal').hidden = false;
+      return;
+    }
+    const sc = $('adminStatsCards');
+    if (sc) sc.innerHTML = '<div class="admin-stat-card"><div class="admin-stat-label" style="color:#f87171">⚠️ \u6570\u636e\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5</div></div>';
+  }
+}
+
+function _roleBadgeHtml(r) {
+  if (r === 'admin') return '<span class="admin-badge admin-badge--admin">管理员</span>';
+  if (r === 'auditor') return '<span class="admin-badge admin-badge--auditor">审核员</span>';
+  return '<span class="admin-badge admin-badge--user">用户</span>';
+}
+
+async function loadAdminUsers(page) {
+  const searchEl = $('adminUsersSearch');
+  const roleEl   = $('adminUsersRoleFilter');
+  const search   = (searchEl && searchEl.value.trim()) || '';
+  const role     = (roleEl   && roleEl.value)          || '';
+  const params   = new URLSearchParams({ page, page_size: 10 });
+  if (search) params.set('search', search);
+  if (role)   params.set('role',   role);
+  try {
+    const res = await fetch(`/api/admin/users?${params}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const totalEl = $('adminUsersTotal');
+    if (totalEl) totalEl.textContent = `\u5171 ${data.total} \u6761`;
+
+    const wrap = $('adminUsersTable');
+    if (!wrap) return;
+    if (!data.users || data.users.length === 0) {
+      wrap.innerHTML = '<p style="color:#8b90a0;padding:20px;text-align:center">\u6682\u65e0\u6570\u636e</p>';
+    } else {
+      wrap.innerHTML = `
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>\u7528\u6237\u540d</th><th>\u89d2\u8272</th><th>\u6ce8\u518c\u65f6\u95f4</th></tr></thead>
+          <tbody>${data.users.map(u => `<tr>
+            <td>${u.id}</td>
+            <td>${_escHtml(u.username)}</td>
+            <td>${_roleBadgeHtml(u.role)}</td>
+            <td>${new Date(u.created_at).toLocaleString()}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+    }
+    _renderPagination($('adminUsersPagination'), page, data.total, 10, 'loadAdminUsers');
+  } catch (e) {
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); closeAdminPanel(); return; }
+    const w = $('adminUsersTable');
+    if (w) w.innerHTML = '<p style="color:#f87171;padding:16px">\u26a0\ufe0f \u52a0\u8f7d\u5931\u8d25</p>';
+  }
+}
+
+async function loadAdminDetections(page) {
+  const searchEl = $('adminDetectionsSearch');
+  const labelEl  = $('adminDetectionsLabelFilter');
+  const search   = (searchEl && searchEl.value.trim()) || '';
+  const label    = (labelEl  && labelEl.value)         || '';
+  const params   = new URLSearchParams({ page, page_size: 10 });
+  if (search) params.set('search', search);
+  if (label)  params.set('label',  label);
+  try {
+    const res = await fetch(`/api/admin/detections?${params}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const totalEl = $('adminDetectionsTotal');
+    if (totalEl) totalEl.textContent = `\u5171 ${data.total} \u6761`;
+
+    const wrap = $('adminDetectionsTable');
+    if (!wrap) return;
+    if (!data.detections || data.detections.length === 0) {
+      wrap.innerHTML = '<p style="color:#8b90a0;padding:20px;text-align:center">\u6682\u65e0\u6570\u636e</p>';
+    } else {
+      wrap.innerHTML = `
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>\u7528\u6237</th><th>\u6765\u6e90</th><th>\u7ed3\u679c</th><th>\u7f6e\u4fe1\u5ea6</th><th>\u65f6\u95f4</th><th>\u7edf\u8ba1</th></tr></thead>
+          <tbody>${data.detections.map(d => `<tr>
+            <td>${d.id}</td>
+            <td>${_escHtml(String(d.user_id ?? '\u533f\u540d'))}</td>
+            <td title="${_escHtml(d.image_url||'')}" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              ${d.image_url ? _escHtml(d.image_url.slice(0,35)) + '\u2026' : '\u672c\u5730\u4e0a\u4f20'}
+            </td>
+            <td><span class="admin-badge ${d.label==='FAKE'?'admin-badge--fake':'admin-badge--real'}">${d.label==='FAKE'?'AI\u751f\u6210':'\u771f\u5b9e'}</span></td>
+            <td>${Math.round(d.confidence)}%</td>
+            <td>${new Date(d.created_at).toLocaleString()}</td>
+            <td><button class="admin-stats-btn" onclick="openImageStats(${d.id})" title="\u67e5\u770b\u56fe\u7247\u7edf\u8ba1">\ud83d\udcca</button></td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+    }
+    _renderPagination($('adminDetectionsPagination'), page, data.total, 10, 'loadAdminDetections');
+  } catch (e) {
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); closeAdminPanel(); return; }
+    const w = $('adminDetectionsTable');
+    if (w) w.innerHTML = '<p style="color:#f87171;padding:16px">\u26a0\ufe0f \u52a0\u8f7d\u5931\u8d25</p>';
+  }
+}
+
+/* ── Image-level statistics modal ─────────────────────────────────── */
+async function openImageStats(detectionId) {
+  openActionModal(`<div style="text-align:center;padding:28px"><div style="color:#60a5fa;font-size:1.5rem">\u23f3 \u52a0\u8f7d\u4e2d\u2026</div></div>`);
+  try {
+    const res = await fetch(`/api/admin/image-stats/${detectionId}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    const fakeColor = '#f87171';
+    const realColor = '#4ade80';
+    const rateColor = d.fake_rate >= 70 ? fakeColor : d.fake_rate >= 40 ? '#f97316' : realColor;
+    actionModalContent.innerHTML = `
+      <div style="padding:20px">
+        <h3 style="color:#e4e6ed;margin:0 0 14px;font-size:1rem">\ud83d\udcca \u56fe\u7247\u68c0\u6d4b\u7edf\u8ba1</h3>
+        ${d.image_url ? `<p style="color:#6b7280;font-size:0.78rem;margin:0 0 14px;word-break:break-all">${_escHtml(d.image_url.slice(0,90))}${d.image_url.length>90?'\u2026':''}</p>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+          <div style="background:#272b35;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:#e4e6ed">${d.total_detections}</div>
+            <div style="font-size:0.72rem;color:#6b7280;margin-top:3px">\u68c0\u6d4b\u6b21\u6570</div>
+          </div>
+          <div style="background:#272b35;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:${fakeColor}">${d.fake_count}</div>
+            <div style="font-size:0.72rem;color:#6b7280;margin-top:3px">AI\u751f\u6210</div>
+          </div>
+          <div style="background:#272b35;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:${realColor}">${d.real_count}</div>
+            <div style="font-size:0.72rem;color:#6b7280;margin-top:3px">\u771f\u5b9e</div>
+          </div>
+        </div>
+        <div style="background:#272b35;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+            <span style="color:#8b90a0;font-size:0.85rem">AI\u751f\u6210\u7387</span>
+            <span style="font-size:1.1rem;font-weight:700;color:${rateColor}">${d.fake_rate}%</span>
+          </div>
+          <div style="background:#1e2028;border-radius:4px;height:7px;overflow:hidden">
+            <div style="width:${d.fake_rate}%;height:100%;background:${rateColor};border-radius:4px"></div>
+          </div>
+        </div>
+        <div style="background:#272b35;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#8b90a0;font-size:0.85rem">\u7528\u6237\u8bef\u5224\u53cd\u9988</span>
+          <span style="color:#e4e6ed;font-weight:600">${d.feedback_count} \u6b21</span>
+        </div>
+        ${d.recent_feedbacks && d.recent_feedbacks.length > 0 ? `
+        <div style="margin-bottom:14px">
+          <p style="color:#6b7280;font-size:0.78rem;margin:0 0 6px">\u6700\u8fd1\u53cd\u9988\uff1a</p>
+          ${d.recent_feedbacks.map(fb => `
+            <div style="background:#1e2028;border-radius:6px;padding:7px 10px;margin-bottom:4px;font-size:0.8rem;display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#8b90a0">${fb.reported_label}\u2192<span style="color:${fb.correct_label==='FAKE'?fakeColor:realColor}">${fb.correct_label}</span>${fb.note?` &middot; <span style="color:#c0c4d0">${_escHtml((fb.note||'').slice(0,28))}</span>`:''}</span>
+              <span style="color:#4b5563;font-size:0.72rem">${new Date(fb.created_at).toLocaleDateString()}</span>
+            </div>`).join('')}
+        </div>` : ''}
+        <button class="btn-detect" id="btnActionConfirm" style="width:100%">\u5173\u95ed</button>
+      </div>`;
+    $('btnActionConfirm').addEventListener('click', closeActionModal);
+  } catch(e) {
+    actionModalContent.innerHTML = `<div style="padding:24px;text-align:center">
+      <p style="color:#f87171">\u26a0\ufe0f \u52a0\u8f7d\u7edf\u8ba1\u5931\u8d25</p>
+      <button class="btn-detect" id="btnActionConfirm" style="margin-top:14px">\u5173\u95ed</button>
+    </div>`;
+    $('btnActionConfirm').addEventListener('click', closeActionModal);
+  }
+}
+
+/* ── Admin feedback list ──────────────────────────────────────────── */
+async function loadAdminFeedback(page) {
+  const params = new URLSearchParams({ page, page_size: 10 });
+  try {
+    const res = await fetch(`/api/admin/feedback?${params}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const totalEl = $('adminFeedbackTotal');
+    if (totalEl) totalEl.textContent = `\u5171 ${data.total} \u6761\u53cd\u9988`;
+
+    const wrap = $('adminFeedbackTable');
+    if (!wrap) return;
+    if (!data.feedbacks || data.feedbacks.length === 0) {
+      wrap.innerHTML = '<p style="color:#8b90a0;padding:24px;text-align:center">\u6682\u65e0\u53cd\u9988\u6570\u636e</p>';
+    } else {
+      wrap.innerHTML = `
+        <table class="admin-table">
+          <thead><tr>
+            <th>ID</th><th>\u68c0\u6d4b ID</th><th>\u539f\u5224\u65ad</th><th>\u5e94\u4e3a</th><th>\u5907\u6ce8</th><th>\u96c6\u6210\u72b6\u6001</th><th>\u65f6\u95f4</th>
+          </tr></thead>
+          <tbody>${data.feedbacks.map(f => `<tr>
+            <td>${f.id}</td>
+            <td>${f.detection_id || '-'}</td>
+            <td><span class="admin-badge ${f.reported_label==='FAKE'?'admin-badge--fake':'admin-badge--real'}">${f.reported_label==='FAKE'?'AI\u751f\u6210':'\u771f\u5b9e'}</span></td>
+            <td><span class="admin-badge ${f.correct_label==='FAKE'?'admin-badge--fake':'admin-badge--real'}">${f.correct_label==='FAKE'?'AI\u751f\u6210':'\u771f\u5b9e'}</span></td>
+            <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_escHtml(f.note||'')}">${_escHtml(f.note||'-')}</td>
+            <td><span class="admin-badge ${f.used_in_training?'admin-badge--trained':'admin-badge--pending'}">${f.used_in_training?'\u5df2\u96c6\u6210':'\u5f85\u96c6\u6210'}</span></td>
+            <td>${new Date(f.created_at).toLocaleString()}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+    }
+    _renderPagination($('adminFeedbackPagination'), page, data.total, 10, 'loadAdminFeedback');
+  } catch (e) {
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); closeAdminPanel(); return; }
+    const w = $('adminFeedbackTable');
+    if (w) w.innerHTML = '<p style="color:#f87171;padding:16px">\u26a0\ufe0f \u52a0\u8f7d\u5931\u8d25</p>';
+  }
+}
+
+// Bind integrate-training button (element always in DOM)
+const _btnIntegrate = $('btnIntegrateTraining');
+if (_btnIntegrate) {
+  _btnIntegrate.addEventListener('click', async () => {
+    const statusEl = $('integrateStatus');
+    _btnIntegrate.disabled = true;
+    _btnIntegrate.textContent = '\u96c6\u6210\u4e2d\u2026';
+    statusEl.textContent = '';
+    try {
+      const res = await fetch('/api/admin/feedback/integrate', { method: 'POST', headers: authHeaders() });
+      const data = await res.json();
+      statusEl.textContent = res.ok ? `\u2705 ${data.message}` : `\u274c ${data.detail || '\u5931\u8d25'}`;
+      if (res.ok) loadAdminFeedback(1);
+    } catch(e) {
+      statusEl.textContent = '\u274c \u7f51\u7edc\u9519\u8bef';
+    } finally {
+      _btnIntegrate.disabled = false;
+      _btnIntegrate.textContent = '\ud83d\udce6 \u96c6\u6210\u5230\u8bad\u7ec3\u96c6';
+    }
+  });
+}
