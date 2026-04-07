@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-app.txt .
+COPY CLIP/ ./CLIP/
 RUN pip install --no-cache-dir -r requirements-app.txt
 
 COPY . .

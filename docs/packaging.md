@@ -102,21 +102,21 @@ dist/AIGI-Holmes-Setup.exe
 
 ---
 
-## Desktop window launcher (`desktop_app.py`)
+## Desktop window launcher (`desktop_launcher.py`)
 
-`desktop_app.py` is the entry point used by PyInstaller.  It:
+`desktop_launcher.py` is the entry point used by PyInstaller.  It:
 
-1. Starts the Gradio server (`app.py`) on `127.0.0.1:7860` in a background
-   thread.
-2. Waits up to 30 seconds for the server to become available.
-3. Opens a `pywebview` window that displays the Gradio UI — no browser
-   needed.
+1. Starts the **FastAPI backend** (`backend.main:app`) via uvicorn on
+   `127.0.0.1:7860` as a subprocess.
+2. Waits up to 60 seconds for the server to become available.
+3. Opens a `pywebview` window that displays the full-featured web UI —
+   no browser needed.
 
 To run the desktop launcher directly (developer mode):
 
 ```bash
 pip install pywebview
-python desktop_app.py
+python desktop_launcher.py
 ```
 
 ---

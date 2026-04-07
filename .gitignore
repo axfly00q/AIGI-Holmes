@@ -172,6 +172,11 @@ Untitled3-Copy2.ipynb
 Untitled3-Copy3.ipynb
 Untitled3.ipynb
 __MACOSX/
+# Training data directories (large files, not needed for distribution)
+data/
+data 1/
+data*/
+
 ablation_checkpoints/
 ablation_data/
 autogressive_data.zip

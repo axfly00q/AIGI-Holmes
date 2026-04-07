@@ -129,10 +129,13 @@ $('btnRoleUnlock').addEventListener('click', () => {
     $('rolePassError').hidden = true;
     $('roleStep1').hidden = true;
     $('roleStep2').hidden = false;
+    setStatus($('roleStatus'), '✅ 密码正确，已进入角色管理界面', 'success');
   } else {
     $('rolePassError').hidden = false;
     $('rolePass').value = '';
     $('rolePass').focus();
+    $('btnRoleUnlock').disabled = true;
+    setTimeout(() => { $('btnRoleUnlock').disabled = false; }, 2000);
   }
 });
 $('rolePass').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnRoleUnlock').click(); });
