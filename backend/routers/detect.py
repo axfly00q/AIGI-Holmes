@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, UploadFile, File, BackgroundTasks
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from backend.cache import get_cached_result, set_cached_result
 from backend.database import get_db
@@ -491,3 +492,313 @@ async def api_detect_batch_run(
     asyncio.create_task(_process_batch_run(job_id, uploads_data, user.id))
 
     return {"status": "processing", "file_count": len(uploads_data)}
+
+
+# ── AI Analysis Endpoints ───────────────────────────────────────────────────
+
+class AnalyzeRequest(BaseModel):
+    question: str
+
+
+@router.get("/detection/{detection_id}/analyze")
+async def api_analyze_detection(
+    detection_id: int,
+    question: str = Query(..., min_length=1, max_length=500),
+    session_id: str = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    流式返回豆包AI对检测结果的分析。
+    使用Server-Sent Events (SSE) 进行流式传输。
+    支持多轮对话（通过session_id传入时获取历史上下文）。
+    """
+    from fastapi.responses import StreamingResponse
+    from backend.config import get_settings
+    from backend.llm.doubao_client import DoubaoClient
+    from backend.session_store import get_or_create_session
+
+    # 获取检测记录
+    stmt = select(DetectionRecord).where(DetectionRecord.id == detection_id)
+    result = await db.execute(stmt)
+    record = result.scalar_one_or_none()
+    if not record:
+        raise ImageFormatError(f"检测记录 {detection_id} 不存在")
+
+    # 转换为字典
+    record_dict = {
+        "label": record.label,
+        "label_zh": "AI生成" if record.label == "FAKE" else "真实照片",
+        "confidence": record.confidence,
+        "probs": json.loads(record.probs_json) if record.probs_json else [],
+    }
+
+    # 初始化豆包客户端
+    settings = get_settings()
+    if not settings.DOUBAO_API_KEY:
+        raise ImageFormatError("豆包AI服务未配置")
+
+    client = DoubaoClient(settings.DOUBAO_API_KEY, model=settings.DOUBAO_MODEL)
+
+    # 获取或创建会话
+    if not session_id:
+        import time
+        session_id = "session_" + str(detection_id) + "_" + str(int(time.time() * 1000))
+
+    session = get_or_create_session(session_id)
+
+    async def event_generator():
+        """SSE事件生成器，支持多轮对话"""
+        full_response = ""
+        try:
+            # 获取该检测的历史对话，用于上下文
+            conversation_history = None
+            history = session.get_history_for_detection(detection_id)
+            if history:
+                # 转换为豆包API需要的消息格式
+                conversation_history = []
+                for entry in history:
+                    conversation_history.append({
+                        "role": "user",
+                        "content": entry["question"]
+                    })
+                    conversation_history.append({
+                        "role": "assistant",
+                        "content": entry["answer"]
+                    })
+
+            async for chunk in client.stream_analysis(
+                user_question=question,
+                detection_result=record_dict,
+                image_info=f"来源URL: {record.image_url}" if record.image_url else "",
+                conversation_history=conversation_history,
+            ):
+                if chunk == "[DONE]":
+                    # 添加到会话历史
+                    session.add_entry(detection_id, question, full_response)
+                    yield f"data: [DONE]\n\n"
+                else:
+                    full_response += chunk
+                    # SSE格式：data: <content>\n\n
+                    yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            import logging
+            logging.error(f"Stream analysis error: {e}")
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/image/download")
+async def api_download_image(
+    url: str = Query(..., min_length=1),
+):
+    """
+    下载图片文件（支持跨域转发下载）。
+    应用SSRF防护，拒绝私有IP和本地地址。
+    """
+    from fastapi.responses import StreamingResponse
+
+    # SSRF 防护
+    try:
+        validate_public_url(url)
+    except ValueError as e:
+        raise ImageFormatError(f"URL验证失败：{str(e)}")
+
+    # 下载图片
+    img = await async_download_image(url)
+    if img is None:
+        raise ImageFormatError("无法下载图片")
+
+    # 转为字节流
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="image/png",
+        headers={"Content-Disposition": "attachment; filename=image.png"},
+    )
+
+
+@router.get("/detection/{detection_id}/analysis-history")
+async def api_get_analysis_history(
+    detection_id: int,
+    session_id: str = Query(None),
+):
+    """
+    获取指定检测的分析历史（用于多轮对话）。
+    需要session_id才能获取该会话的历史。
+    """
+    from backend.session_store import get_session
+
+    if not session_id:
+        return {
+            "detection_id": detection_id,
+            "session_id": None,
+            "history": [],
+            "message": "未提供session_id"
+        }
+
+    session = get_session(session_id)
+    if not session:
+        return {
+            "detection_id": detection_id,
+            "session_id": session_id,
+            "history": [],
+            "message": "会话已过期或不存在"
+        }
+
+    history = session.get_history_for_detection(detection_id)
+    return {
+        "detection_id": detection_id,
+        "session_id": session_id,
+        "history": history,
+    }
+
+
+@router.get("/images/batch-download")
+async def api_batch_download_images(
+    urls: str = Query(..., min_length=1),
+):
+    """
+    批量下载图片并打包为ZIP文件。
+    urls 参数支持JSON数组格式：["url1", "url2", ...] 或逗号分隔格式：url1,url2,...
+    """
+    from fastapi.responses import FileResponse
+    import zipfile
+    import tempfile
+    from datetime import datetime
+    import shutil
+
+    # 解析URL列表
+    try:
+        if urls.startswith('['):
+            url_list = json.loads(urls)
+        else:
+            url_list = [u.strip() for u in urls.split(',') if u.strip()]
+    except (json.JSONDecodeError, ValueError) as e:
+        raise ImageFormatError(f"URLs格式无效：{str(e)}")
+
+    if not url_list:
+        raise ImageFormatError("未提供任何URL")
+
+    if len(url_list) > 50:
+        raise ImageFormatError("最多支持50张图片")
+
+    # 创建临时ZIP文件
+    zip_filename = f"images_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    temp_dir = tempfile.mkdtemp()
+    zip_path = os.path.join(temp_dir, zip_filename)
+
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            success_count = 0
+            for i, url in enumerate(url_list, 1):
+                try:
+                    # SSRF防护
+                    validate_public_url(url)
+                    # 下载图片
+                    img = await async_download_image(url)
+                    if img:
+                        # 保存为PNG
+                        buf = io.BytesIO()
+                        img.save(buf, format="PNG")
+                        zf.writestr(f"image_{i:02d}.png", buf.getvalue())
+                        success_count += 1
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to download image {i}: {str(e)}")
+                    # 跳过无法下载的图片，继续处理下一个
+
+        if success_count == 0:
+            raise ImageFormatError("无法下载任何图片")
+
+        # 返回ZIP文件
+        return FileResponse(
+            zip_path,
+            media_type="application/zip",
+            filename=zip_filename,
+            headers={"Content-Disposition": f"attachment; filename={zip_filename}"}
+        )
+
+    except ImageFormatError:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise ImageFormatError(f"批量下载失败：{str(e)}")
+
+
+class TranslateRequest(BaseModel):
+    text: str
+
+
+@router.post("/translate")
+async def api_translate(body: TranslateRequest):
+    """
+    将文本翻译为中文（使用豆包AI）。
+    """
+    from fastapi.responses import StreamingResponse
+    from backend.config import get_settings
+    import httpx
+
+    settings = get_settings()
+    if not settings.DOUBAO_API_KEY:
+        raise ImageFormatError("豆包AI服务未配置")
+
+    text = body.text.strip()
+    if not text:
+        raise ImageFormatError("文本不能为空")
+
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一名专业翻译。请将用户提供的英文新闻摘要翻译成中文，保持专业和准确，直接输出译文，不加任何解释。",
+        },
+        {"role": "user", "content": text},
+    ]
+
+    headers = {
+        "Authorization": f"Bearer {settings.DOUBAO_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": settings.DOUBAO_MODEL,
+        "messages": messages,
+        "stream": True,
+    }
+
+    async def event_gen():
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                async with client.stream(
+                    "POST",
+                    "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+                    json=payload,
+                    headers=headers,
+                ) as response:
+                    if response.status_code != 200:
+                        body_text = await response.aread()
+                        err_msg = f'API错误 {response.status_code}: {body_text.decode(errors="replace")[:200]}'
+                        yield f"data: {json.dumps({'error': err_msg}, ensure_ascii=False)}\n\n"
+                        return
+                    async for line in response.aiter_lines():
+                        if not line.strip() or not line.startswith("data: "):
+                            continue
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            yield "data: [DONE]\n\n"
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            content = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                            if content:
+                                yield f"data: {json.dumps({'chunk': content}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            pass
+        except Exception as exc:
+            yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")

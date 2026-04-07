@@ -328,13 +328,13 @@ async def integrate_feedback_to_training(
     _=Depends(require_role("admin")),
 ):
     """
-    For each unused feedback record that has an image_url, download the image and
+    For each unused feedback record, download the image (if image_url exists) and
     save it under data/feedback/{FAKE|REAL}/ so that finetune.py can pick it up.
+    Records without image_url are still marked as integrated (skipped from download).
     """
     result = await db.execute(
         select(FeedbackRecord)
         .where(FeedbackRecord.used_in_training == 0)
-        .where(FeedbackRecord.image_url.isnot(None))
     )
     pending = result.scalars().all()
 
@@ -346,12 +346,14 @@ async def integrate_feedback_to_training(
 
     for fb in pending:
         try:
-            label_dir = os.path.join("data", "feedback", fb.correct_label)
-            os.makedirs(label_dir, exist_ok=True)
-            filename = f"{fb.image_hash or fb.id}.jpg"
-            filepath = os.path.join(label_dir, filename)
-            if not os.path.exists(filepath):
-                await _download_to(fb.image_url, filepath)
+            # Skip download if no image_url, but still mark as integrated
+            if fb.image_url:
+                label_dir = os.path.join("data", "feedback", fb.correct_label)
+                os.makedirs(label_dir, exist_ok=True)
+                filename = f"{fb.image_hash or fb.id}.jpg"
+                filepath = os.path.join(label_dir, filename)
+                if not os.path.exists(filepath):
+                    await _download_to(fb.image_url, filepath)
             fb.used_in_training = 1
             integrated += 1
         except Exception:
@@ -361,7 +363,7 @@ async def integrate_feedback_to_training(
     return {
         "integrated": integrated,
         "skipped": skipped,
-        "message": f"成功集成 {integrated} 张，跳过 {skipped} 张（无法下载）",
+        "message": f"成功集成 {integrated} 条反馈，跳过 {skipped} 条（下载失败）",
     }
 
 

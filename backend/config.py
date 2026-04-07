@@ -27,6 +27,10 @@ class Settings(BaseSettings):
         "finetuned_fake_real_resnet50.pth",
     )
 
+    # Doubao AI
+    DOUBAO_API_KEY: str = ""
+    DOUBAO_MODEL: str = "doubao-pro-32k"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

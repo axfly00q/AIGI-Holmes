@@ -13,7 +13,7 @@
             color: #1e293b;
         }
         .header {
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            background: #1e2028;
             color: white;
             padding: 1rem 2rem;
             display: flex;
@@ -30,7 +30,7 @@
             transition: all 0.2s;
             cursor: pointer;
         }
-        .nav a:hover, .nav a.active { background: rgba(255,255,255,0.2); color: white; }
+        .nav a:hover, .nav a.active { background: rgba(37,99,235,0.25); color: #60a5fa; }
         .logout-btn {
             background: rgba(255,255,255,0.15);
             border: none;
@@ -52,7 +52,7 @@
             padding: 1.5rem;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        .stat-number { font-size: 2.5rem; font-weight: bold; color: #2a5298; }
+        .stat-number { font-size: 2.5rem; font-weight: bold; color: #2563eb; }
         .stat-label { color: #64748b; margin-top: 0.5rem; }
         .chart-card {
             background: white;
@@ -97,12 +97,12 @@
             border-radius: 8px;
             cursor: pointer;
         }
-        .page-btn.active { background: #2a5298; color: white; border-color: #2a5298; }
+        .page-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>📊 AIGI-Holmes 后台管理</h1>
+        <h1>AIGI-Holmes 后台管理</h1>
         <div class="nav">
             <a class="active" data-tab="dashboard">仪表盘</a>
             <a data-tab="users">用户管理</a>
@@ -115,18 +115,18 @@
         <div id="dashboard-tab">
             <div class="stats-grid" id="stats-cards"></div>
             <div class="chart-card">
-                <h3>📈 近7天检测量趋势</h3>
+                <h3>近7天检测量趋势</h3>
                 <canvas id="dailyChart" height="200"></canvas>
             </div>
             <div class="chart-card">
-                <h3>🔥 造假率 Top 5 来源</h3>
+                <h3>造假率 Top 5 来源</h3>
                 <canvas id="sceneChart" height="200"></canvas>
             </div>
         </div>
 
         <div id="users-tab" style="display: none;">
             <div class="table-container">
-                <h3>👥 用户列表</h3>
+                <h3>用户列表</h3>
                 <div id="users-table"></div>
                 <div id="users-pagination" class="pagination"></div>
             </div>
@@ -134,7 +134,7 @@
 
         <div id="detections-tab" style="display: none;">
             <div class="table-container">
-                <h3>📋 检测记录</h3>
+                <h3>检测记录</h3>
                 <div id="detections-table"></div>
                 <div id="detections-pagination" class="pagination"></div>
             </div>
@@ -191,8 +191,8 @@
                             datasets: [{
                                 label: '检测次数',
                                 data: data.daily_stats.map(d => d.count),
-                                borderColor: '#2a5298',
-                                backgroundColor: 'rgba(42, 82, 152, 0.1)',
+                                borderColor: '#2563eb',
+                                backgroundColor: 'rgba(37, 99, 235, 0.1)',
                                 tension: 0.3,
                                 fill: true
                             }]

@@ -12,7 +12,11 @@
     <header class="header">
       <div class="header-inner">
         <div class="header-brand">
-          <span class="header-logo">🔍</span>
+          <span class="header-logo">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+          </span>
           <div>
             <h1 class="header-title">AIGI-Holmes</h1>
             <p class="header-sub">新闻图片 AI 生成检测</p>
@@ -26,7 +30,12 @@
             <span class="auth-username" id="authUsername"></span>
             <span class="auth-role-badge" id="authRoleBadge"></span>
             <button class="btn-secondary btn-sm" id="btnShowRole">管理</button>
-            <button class="btn-secondary btn-sm" id="btnAdminPanel" hidden title="管理后台">🛡️ 管理后台</button>
+            <button class="btn-secondary btn-sm" id="btnAdminPanel" hidden title="管理后台">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+              </svg>
+              管理后台
+            </button>
             <button class="btn-secondary btn-sm" id="btnLogout">退出</button>
           </div>
         </div>
@@ -35,9 +44,24 @@
 
     <main class="main">
       <div class="tabs" role="tablist">
-        <button class="tab-btn active" role="tab" data-tab="upload">📤 上传图片</button>
-        <button class="tab-btn" role="tab" data-tab="url">🌐 新闻 URL 检测</button>
-        <button class="tab-btn" role="tab" data-tab="batch">📁 批量检测</button>
+        <button class="tab-btn active" role="tab" data-tab="upload">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+          </svg>
+          上传图片
+        </button>
+        <button class="tab-btn" role="tab" data-tab="url">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/>
+          </svg>
+          新闻 URL 检测
+        </button>
+        <button class="tab-btn" role="tab" data-tab="batch">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+          </svg>
+          批量检测
+        </button>
       </div>
 
       <div class="tab-pane active" id="tab-upload" role="tabpanel">
@@ -58,7 +82,13 @@
               <img class="cam-overlay" id="camOverlay" alt="热力图" />
             </div>
             <div class="upload-actions">
-              <button class="btn-cam-toggle" id="btnCamToggle" title="显示/隐藏热力图" hidden>🌡️ 热力图</button>
+              <button class="btn-cam-toggle" id="btnCamToggle" title="显示/隐藏热力图" hidden>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.047 8.287 8.287 0 009 9.601a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/>
+                  <path d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z"/>
+                </svg>
+                热力图
+              </button>
               <button class="btn-icon" id="btnReupload" title="重新上传" hidden>
                 <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
               </button>
@@ -97,18 +127,43 @@
             <div class="report-download" id="reportDownload" hidden>
               <p class="prob-title">下载报告</p>
               <div class="report-btn-row">
-                <button class="btn-report" id="btnDownloadPdf">📄 PDF</button>
-                <button class="btn-report" id="btnDownloadExcel">📊 Excel</button>
+                <button class="btn-report" id="btnDownloadPdf">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+                  </svg>
+                  PDF
+                </button>
+                <button class="btn-report" id="btnDownloadExcel">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-3.75.125v-9.75A1.125 1.125 0 013.375 7.5h1.5m0 10.875h1.875a1.125 1.125 0 001.125-1.125V8.625a1.125 1.125 0 00-1.125-1.125H6"/>
+                  </svg>
+                  Excel
+                </button>
               </div>
             </div>
 
-            <!-- ✅ 快捷操作按钮 正确位置 -->
-            <div id="quickActions" hidden style="margin-top:16px; padding:12px; border:1px solid #ddd; border-radius:10px; background:#1e1e1e;">
-              <p style="color:#fff; margin:0 0 10px 0;">快捷操作</p>
-              <div style="display:flex; gap:8px;">
-                <button id="btnMarkMisjudge" style="flex:1;padding:10px;border:none;border-radius:6px;background:#ffca29; color:#000;cursor:pointer;">🚨 标记误判</button>
-                <button id="btnRedetect" style="flex:1;padding:10px;border:none;border-radius:6px;background:#3b82f6; color:#fff;cursor:pointer;">🔄 重新检测</button>
-                <button id="btnShare" style="flex:1;padding:10px;border:none;border-radius:6px;background:#10b981; color:#fff;cursor:pointer;">🔗 分享同事</button>
+            <!-- 快捷操作 -->
+            <div id="quickActions" class="quick-actions" hidden>
+              <p class="quick-actions__title">快捷操作</p>
+              <div class="quick-actions__row">
+                <button id="btnMarkMisjudge" class="btn-misjudge">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                  </svg>
+                  标记误判
+                </button>
+                <button id="btnRedetect" class="btn-redetect">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                  </svg>
+                  重新检测
+                </button>
+                <button id="btnShare" class="btn-share">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
+                  </svg>
+                  分享同事
+                </button>
               </div>
             </div>
 
@@ -120,7 +175,12 @@
 
         <!-- 检测依据 — 全宽区块，检测后展示 -->
         <details class="explain-section explain-section--fw" id="explainSection" hidden>
-          <summary class="explain-toggle">📝 检测依据</summary>
+          <summary class="explain-toggle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+            </svg>
+            检测依据
+          </summary>
           <div class="explain-body" id="explainBody">
             <div class="explain-level" id="explainLevel"></div>
             <p class="explain-summary" id="explainSummary"></p>
@@ -128,6 +188,34 @@
             <p class="explain-disclaimer" id="explainDisclaimer"></p>
           </div>
         </details>
+
+        <!-- AI 智能分析面板 -->
+        <div class="ai-analysis-panel" id="aiAnalysisPanel" hidden>
+          <div class="ai-analysis-header">
+            <h3 class="ai-analysis-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+              </svg>
+              AI 智能分析
+            </h3>
+            <p class="ai-analysis-subtitle">输入你的提问，我来帮你分析为什么这张图片被判定为 AI 生成</p>
+          </div>
+
+          <!-- 对话消息容器 -->
+          <div class="chat-container" id="chatContainer"></div>
+
+          <div class="analysis-error" id="analysisError" hidden></div>
+
+          <div class="ai-analysis-form">
+            <textarea id="analysisQuestion" class="analysis-input" placeholder="例如：这张图片的哪些特征表明它是 AI 生成的？" rows="3"></textarea>
+            <button id="btnAnalyze" class="btn-analyze">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16.6915026,12.4744748 L3.50612381,13.2599618 C3.19218625,13.2599618 3.03521743,13.4170592 3.03521743,13.5741566 L1.15159189,20.0151496 C0.8376543,20.8006365 0.99,21.89 1.77946707,22.52 C2.41,22.99 3.50612381,23.1 4.13399899,22.8429026 L21.714504,14.0454487 C22.6563168,13.5741566 23.1272231,12.6315722 22.9702544,11.6889879 L4.13399899,1.16151496 C3.34915502,0.9 2.40734225,1.00636533 1.77946707,1.4776575 C0.994623095,2.10604706 0.837654326,3.0486314 1.15159189,3.99 L3.03521743,10.4309929 C3.03521743,10.5880903 3.19218625,10.7451887 3.50612381,10.7451887 L16.6915026,11.5306756 C16.6915026,11.5306756 17.1624089,11.5306756 17.1624089,12.0019677 C17.1624089,12.4744748 16.6915026,12.4744748 16.6915026,12.4744748 Z"/>
+              </svg>
+              发送提问
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="tab-pane" id="tab-url" role="tabpanel">
@@ -140,10 +228,16 @@
         <!-- 新闻摘要区域 -->
         <div class="url-summary-panel" id="urlSummaryPanel" hidden>
           <div class="url-summary-header">
-            <span class="url-summary-icon">📰</span>
-            <div>
+            <span class="url-summary-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6V7.5z"/>
+              </svg>
+            </span>
+            <div style="flex:1;min-width:0;">
               <h3 class="url-summary-title" id="urlPageTitle">新闻标题</h3>
               <p class="url-summary-text" id="urlPageSummary">新闻摘要内容</p>
+              <div id="urlSummaryTranslated" style="display:none;color:#a5b4fc;font-size:0.88rem;margin-top:6px;line-height:1.6;"></div>
+              <button id="btnTranslateSummary" class="btn-translate" style="display:none;margin-top:8px;">翻译成中文</button>
             </div>
           </div>
         </div>
@@ -167,7 +261,7 @@
             </div>
             <!-- 多维雷达图 -->
             <div class="stats-radar-title">多维度分析</div>
-            <div id="urlRadarChart" style="width:100%;height:240px;"></div>
+            <div id="urlRadarChart" class="url-radar-chart"></div>
             <!-- 图文一致性 -->
             <div class="url-consistency-wrap">
               <span class="stats-label">图文一致性</span>
@@ -191,19 +285,35 @@
         <!-- 快速操作工具栏 -->
         <div class="url-quick-actions" id="urlQuickActions" hidden>
           <button class="quick-action-btn" id="btnUrlShare">
-            <span>🔗</span> 分享链接
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
+            </svg>
+            分享链接
           </button>
           <button class="quick-action-btn" id="btnUrlScrollTop">
-            <span>⬆</span> 回到顶部
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"/>
+            </svg>
+            回到顶部
           </button>
         </div>
 
         <!-- 汇总报告 -->
         <div class="report-section" id="reportSection" hidden>
           <div class="report-section-header">
-            <h3 class="report-title">📊 可视化检测报告</h3>
+            <h3 class="report-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+              </svg>
+              可视化检测报告
+            </h3>
             <div class="report-btn-row">
-              <button class="btn-report" id="btnUrlExportPdf">📄 导出PDF</button>
+              <button class="btn-report" id="btnUrlExportPdf">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+                </svg>
+                导出PDF
+              </button>
             </div>
           </div>
           <div class="report-body" id="reportBody"></div>
@@ -214,7 +324,7 @@
 
       <div class="tab-pane" id="tab-batch" role="tabpanel">
         <div class="batch-hint" id="batchAuthHint" hidden>
-          <p>⚠️ 批量检测需要 <strong>auditor</strong> 或 <strong>admin</strong> 账号登录后使用。</p>
+          <p>批量检测需要 <strong>auditor</strong> 或 <strong>admin</strong> 账号登录后使用。</p>
         </div>
 
         <!-- 层1：初始大拖拽区 -->
@@ -301,14 +411,14 @@
       </div>
       <div id="loginForm">
         <input class="url-input" id="loginUser" placeholder="用户名" autocomplete="username" />
-        <input class="url-input" style="margin-top:10px" id="loginPass" type="password" placeholder="密码" autocomplete="current-password" />
-        <button class="btn-detect" id="btnLogin" style="margin-top:14px">登录</button>
+        <input class="url-input" id="loginPass" type="password" placeholder="密码" autocomplete="current-password" />
+        <button class="btn-detect" id="btnLogin">登录</button>
         <p class="status-msg" id="loginStatus"></p>
       </div>
       <div id="registerForm" hidden>
         <input class="url-input" id="regUser" placeholder="用户名（至少 3 位）" autocomplete="username" />
-        <input class="url-input" style="margin-top:10px" id="regPass" type="password" placeholder="密码（至少 6 位）" autocomplete="new-password" />
-        <button class="btn-detect" id="btnRegister" style="margin-top:14px">注册</button>
+        <input class="url-input" id="regPass" type="password" placeholder="密码（至少 6 位）" autocomplete="new-password" />
+        <button class="btn-detect" id="btnRegister">注册</button>
         <p class="status-msg" id="registerStatus"></p>
       </div>
     </div>
@@ -322,18 +432,18 @@
       <div id="roleStep1">
         <p class="role-step-hint">请输入管理密码以继续：</p>
         <input class="url-input" id="rolePass" type="password" placeholder="管理密码" autocomplete="off" />
-        <button class="btn-detect" id="btnRoleUnlock" style="margin-top:14px">验证</button>
-        <p class="role-error-msg" id="rolePassError" hidden>❌ 密码错误，请重新输入</p>
+        <button class="btn-detect" id="btnRoleUnlock">验证</button>
+        <p class="role-error-msg" id="rolePassError" hidden>密码错误，请重新输入</p>
       </div>
       <div id="roleStep2" hidden>
         <p class="role-step-hint">输入目标用户名，选择新角色：</p>
         <input class="url-input" id="roleTargetUser" placeholder="目标用户名" autocomplete="off" />
-        <select class="role-select" id="roleSelect" style="margin-top:10px">
+        <select class="role-select" id="roleSelect">
           <option value="user">user — 普通用户</option>
           <option value="auditor">auditor — 审核员</option>
           <option value="admin">admin — 管理员</option>
         </select>
-        <button class="btn-detect" id="btnRoleChange" style="margin-top:14px">修改角色</button>
+        <button class="btn-detect" id="btnRoleChange">修改角色</button>
         <p class="status-msg" id="roleStatus"></p>
       </div>
     </div>
@@ -353,7 +463,12 @@
   <div class="modal-overlay" id="adminPanelModal" hidden>
     <div class="admin-panel-modal">
       <div class="admin-panel-header">
-        <h2>🛡️ 管理后台</h2>
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+          </svg>
+          管理后台
+        </h2>
         <div class="admin-panel-tabs">
           <button class="admin-tab-btn active" data-admin-tab="dashboard">仪表盘</button>
           <button class="admin-tab-btn" data-admin-tab="users">用户管理</button>
@@ -367,18 +482,28 @@
         <div class="admin-pane active" id="admin-dashboard">
           <div class="admin-stats-grid" id="adminStatsCards"></div>
           <div class="admin-chart-card">
-            <h3>📈 近7天检测量趋势</h3>
+            <h3>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"/>
+              </svg>
+              近7天检测量趋势
+            </h3>
             <canvas id="adminDailyChart" height="200"></canvas>
           </div>
           <div class="admin-chart-card">
-            <h3>🔥 Top 5 来源</h3>
+            <h3>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+              </svg>
+              Top 5 来源
+            </h3>
             <canvas id="adminSceneChart" height="200"></canvas>
           </div>
         </div>
         <!-- 用户管理 -->
         <div class="admin-pane" id="admin-users">
           <div class="admin-filter-row">
-            <input class="admin-search-input" id="adminUsersSearch" placeholder="🔍 搜索用户名…" autocomplete="off" />
+            <input class="admin-search-input" id="adminUsersSearch" placeholder="搜索用户名…" autocomplete="off" />
             <select class="admin-filter-select" id="adminUsersRoleFilter">
               <option value="">全部角色</option>
               <option value="admin">管理员</option>
@@ -393,7 +518,7 @@
         <!-- 检测记录 -->
         <div class="admin-pane" id="admin-detections">
           <div class="admin-filter-row">
-            <input class="admin-search-input" id="adminDetectionsSearch" placeholder="🔍 搜索来源 URL…" autocomplete="off" />
+            <input class="admin-search-input" id="adminDetectionsSearch" placeholder="搜索来源 URL…" autocomplete="off" />
             <select class="admin-filter-select" id="adminDetectionsLabelFilter">
               <option value="">全部结果</option>
               <option value="FAKE">AI生成</option>
@@ -408,8 +533,13 @@
         <div class="admin-pane" id="admin-feedback">
           <div class="admin-filter-row">
             <span class="admin-total-hint" id="adminFeedbackTotal"></span>
-            <button class="admin-btn-action" id="btnIntegrateTraining">📦 集成到训练集</button>
-            <span id="integrateStatus" style="font-size:0.82rem;color:#8b90a0;"></span>
+            <button class="admin-btn-action" id="btnIntegrateTraining">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
+              </svg>
+              集成到训练集
+            </button>
+            <span id="integrateStatus" class="integrate-status-text"></span>
           </div>
           <div class="admin-table-wrap" id="adminFeedbackTable"></div>
           <div class="admin-pagination" id="adminFeedbackPagination"></div>

@@ -72,8 +72,8 @@ _transform = transforms.Compose([
 ])
 
 LABELS_ZH = {
-    "FAKE": "🤖 AI 生成",
-    "REAL": "📷 真实照片",
+    "FAKE": "AI 生成",
+    "REAL": "真实照片",
 }
 
 
@@ -360,15 +360,15 @@ class _TextContentParser(HTMLParser):
         return self.og_title or self.title or ""
 
     def get_summary(self) -> str:
-        """Simple extractive summary: first ~300 chars of substantial text."""
+        """Extractive summary: up to 5 substantial sentences (~600 chars)."""
         desc = self.og_description
         if desc and len(desc) > 20:
-            return desc[:300]
+            return desc[:600]
         article = self.get_article_text()
         # Pick sentences that look like article content (longer lines)
         sentences = [s for s in article.split("\n") if len(s) > 15]
-        summary = "。".join(sentences[:5])
-        return summary[:300] if summary else article[:300]
+        summary = " ".join(sentences[:5])
+        return summary[:600] if summary else article[:600]
 
 
 class _ImgSrcParser(HTMLParser):

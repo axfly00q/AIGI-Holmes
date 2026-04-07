@@ -71,13 +71,13 @@ $('tabRegisterBtn').addEventListener('click', () => {
 $('btnLogin').addEventListener('click', async () => {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value;
-  if (!username || !password) { setStatus($('loginStatus'), '⚠️ 请填写用户名和密码', 'error'); return; }
+  if (!username || !password) { setStatus($('loginStatus'), '请填写用户名和密码', 'error'); return; }
   const r = await fetch('/api/auth/login', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
   const d = await r.json();
-  if (!r.ok) { setStatus($('loginStatus'), '❌ ' + (d.message || '登录失败'), 'error'); return; }
+  if (!r.ok) { setStatus($('loginStatus'), '' + (d.message || '登录失败'), 'error'); return; }
   const role = JSON.parse(atob(d.access_token.split('.')[1])).role;
   saveAuth(d, username, role);
   $('loginModal').hidden = true;
@@ -89,13 +89,13 @@ $('btnLogin').addEventListener('click', async () => {
 $('btnRegister').addEventListener('click', async () => {
   const username = $('regUser').value.trim();
   const password = $('regPass').value;
-  if (!username || !password) { setStatus($('registerStatus'), '⚠️ 请填写用户名和密码', 'error'); return; }
+  if (!username || !password) { setStatus($('registerStatus'), '请填写用户名和密码', 'error'); return; }
   const r = await fetch('/api/auth/register', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
   const d = await r.json();
-  if (!r.ok) { setStatus($('registerStatus'), '❌ ' + (d.message || '注册失败'), 'error'); return; }
+  if (!r.ok) { setStatus($('registerStatus'), '' + (d.message || '注册失败'), 'error'); return; }
   const role = JSON.parse(atob(d.access_token.split('.')[1])).role;
   saveAuth(d, username, role);
   $('loginModal').hidden = true;
@@ -140,7 +140,7 @@ $('rolePass').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnRo
 $('btnRoleChange').addEventListener('click', async () => {
   const targetUsername = $('roleTargetUser').value.trim();
   const newRole = $('roleSelect').value;
-  if (!targetUsername) { setStatus($('roleStatus'), '⚠️ 请输入目标用户名', 'error'); return; }
+  if (!targetUsername) { setStatus($('roleStatus'), '请输入目标用户名', 'error'); return; }
   $('btnRoleChange').disabled = true;
   $('btnRoleChange').textContent = '修改中…';
   try {
@@ -149,9 +149,9 @@ $('btnRoleChange').addEventListener('click', async () => {
       body: JSON.stringify({ role: newRole }),
     });
     const d = await r.json();
-    if (!r.ok) { setStatus($('roleStatus'), '❌ ' + (d.detail || d.message || '修改失败'), 'error');
+    if (!r.ok) { setStatus($('roleStatus'), '' + (d.detail || d.message || '修改失败'), 'error');
     } else {
-      setStatus($('roleStatus'), `✅ 已将 ${d.username} 的角色改为 ${d.role}`, 'success');
+      setStatus($('roleStatus'), `已将 ${d.username} 的角色改为 ${d.role}`, 'success');
       const rawUser = localStorage.getItem(AUTH_USER_KEY);
       if (rawUser) {
         const cu = JSON.parse(rawUser);
@@ -179,7 +179,7 @@ $('btnRoleChange').addEventListener('click', async () => {
       }
       $('roleTargetUser').value = '';
     }
-  } catch (err) { setStatus($('roleStatus'), '❌ 网络错误', 'error');
+  } catch (err) { setStatus($('roleStatus'), '网络错误', 'error');
   } finally { $('btnRoleChange').disabled = false; $('btnRoleChange').textContent = '修改角色'; }
 });
 $('roleTargetUser').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnRoleChange').click(); });
@@ -274,7 +274,7 @@ $('btnCamToggle').addEventListener('click', e => {
   const show = !cam.classList.contains('visible');
   cam.classList.toggle('visible', show);
   btn.classList.toggle('active', show);
-  btn.textContent = show ? '🌡️ 原图' : '🌡️ 热力图';
+  btn.textContent = show ? '原图' : '热力图';
 });
 
 function renderResult(data) {
@@ -282,7 +282,7 @@ function renderResult(data) {
   const cls = isReal ? 'real' : 'fake';
   const v = $('verdict');
   v.className = 'verdict ' + cls;
-  $('verdictIcon').textContent = isReal ? '📷' : '🤖';
+  $('verdictIcon').textContent = isReal ? '' : '';
   $('verdictLabel').textContent = data.label_zh;
   const c = Math.round(data.confidence);
   $('confValue').textContent = c + '%';
@@ -342,12 +342,12 @@ btnDetect.addEventListener('click', async ()=>{
     const res=await fetch('/api/detect?cam=1',{method:'POST',body:fd,headers:authHeaders()});
     const data=await res.json();
     if(!res.ok||data.error){
-      setStatus(uploadStatus,'❌ 检测失败','error');
+      setStatus(uploadStatus,'检测失败','error');
     }else{
       renderResult(data);
       lastDetectionId = data.detection_id || null;
       lastDetectionLabel = data.label || '';
-      setStatus(uploadStatus,'✅ 检测完成','success');
+      setStatus(uploadStatus,'检测完成','success');
       const rd=$('reportDownload');
       if(data.detection_id&&getToken()){
         rd.hidden=false;
@@ -359,9 +359,22 @@ btnDetect.addEventListener('click', async ()=>{
       if($('quickActions')){
         $('quickActions').hidden=false;
       }
+
+      // ✅ 显示 AI 分析面板（仅在判定为 AI 生成时）
+      currentDetectionId = data.detection_id || null;
+      if($('aiAnalysisPanel') && data.label === 'FAKE'){
+        $('aiAnalysisPanel').hidden=false;
+        resetAnalysisPanel();
+        // 加载该检测的历史记录（支持多轮对话）
+        if (currentDetectionId) {
+          loadAnalysisHistory(currentDetectionId);
+        }
+      } else if($('aiAnalysisPanel')){
+        $('aiAnalysisPanel').hidden=true;
+      }
     }
   }catch(e){
-    setStatus(uploadStatus,'❌ 网络错误','error');
+    setStatus(uploadStatus,'网络错误','error');
   }finally{
     btnDetect.classList.remove('loading');
     btnDetect.innerHTML='开始检测';
@@ -404,6 +417,16 @@ function renderUrlAnalysis(d) {
     $('urlPageTitle').textContent = d.page_title || '未知标题';
     $('urlPageSummary').textContent = d.page_summary || '无法提取摘要';
     $('urlSummaryPanel').hidden = false;
+    // Show translate button when summary is available
+    const summary = d.page_summary || '';
+    const translateBtn = $('btnTranslateSummary');
+    const translatedEl = $('urlSummaryTranslated');
+    if (translateBtn && summary.length > 0) {
+      translateBtn.style.display = 'inline-block';
+      translateBtn.textContent = '翻译成中文';
+      translateBtn.disabled = false;
+      if (translatedEl) { translatedEl.style.display = 'none'; translatedEl.textContent = ''; }
+    }
   } else {
     $('urlSummaryPanel').hidden = true;
   }
@@ -521,7 +544,7 @@ function renderUrlAnalysis(d) {
 
 btnUrl.addEventListener('click', async ()=>{
   const u=urlInput.value.trim();
-  if(!u){setStatus(urlStatus,'⚠️ 请输入URL','error');return;}
+  if(!u){setStatus(urlStatus,'请输入URL','error');return;}
   btnUrl.disabled=true;
   btnUrl.classList.add('loading');
   btnUrl.innerHTML=spinnerHTML()+'抓取中…';
@@ -531,22 +554,22 @@ btnUrl.addEventListener('click', async ()=>{
   $('urlAnalysisLayout').hidden=true;
   const _qa = $('urlQuickActions'); if (_qa) _qa.hidden = true;
   // F2: Progressive status feedback with staged messages
-  setStatus(urlStatus,'⏳ 正在抓取页面内容…','');
-  const _pt1 = setTimeout(()=>{ if(btnUrl.disabled){ btnUrl.innerHTML=spinnerHTML()+'提取图片…'; setStatus(urlStatus,'⏳ 正在识别并提取图片链接…',''); }}, 2200);
-  const _pt2 = setTimeout(()=>{ if(btnUrl.disabled){ btnUrl.innerHTML=spinnerHTML()+'AI 检测中…'; setStatus(urlStatus,'⏳ 正在进行 AI 检测分析，请稍候…',''); }}, 4800);
+  setStatus(urlStatus,'正在抓取页面内容…','');
+  const _pt1 = setTimeout(()=>{ if(btnUrl.disabled){ btnUrl.innerHTML=spinnerHTML()+'提取图片…'; setStatus(urlStatus,'正在识别并提取图片链接…',''); }}, 2200);
+  const _pt2 = setTimeout(()=>{ if(btnUrl.disabled){ btnUrl.innerHTML=spinnerHTML()+'AI 检测中…'; setStatus(urlStatus,'正在进行 AI 检测分析，请稍候…',''); }}, 4800);
   try{
     const res=await fetch('/api/detect-url',{method:'POST',headers:{'Content-Type':'application/json',...authHeaders()},body:JSON.stringify({url:u})});
     clearTimeout(_pt1); clearTimeout(_pt2);
     const d=await res.json();
-    if(!res.ok||d.error){setStatus(urlStatus,`❌ ${d.detail||d.message||'请求失败'}`,'error');
+    if(!res.ok||d.error){setStatus(urlStatus,`${d.detail||d.message||'请求失败'}`,'error');
     }else{
       const cnt = d.count||(d.results||[]).length;
-      setStatus(urlStatus,`✅ 检测完成，共分析 ${cnt} 张图片`,'success');
+      setStatus(urlStatus,`检测完成，共分析 ${cnt} 张图片`,'success');
       renderUrlAnalysis(d);
     }
   }catch(e){
     clearTimeout(_pt1); clearTimeout(_pt2);
-    setStatus(urlStatus,'❌ 网络错误','error');
+    setStatus(urlStatus,'网络错误','error');
   }finally{btnUrl.classList.remove('loading');btnUrl.innerHTML='抓取并检测';btnUrl.disabled=false;}
 });
 urlInput.addEventListener('keydown',e=>{if(e.key==='Enter')btnUrl.click();});
@@ -582,7 +605,7 @@ $('btnUrlShare').addEventListener('click', () => {
   // Show share dialog with URL pre-filled
   openActionModal(`
     <div style="padding:20px;">
-      <h3 style="color:#e4e6ed;margin:0 0 8px;font-size:1rem;">🔗 分享检测链接</h3>
+      <h3 style="color:#e4e6ed;margin:0 0 8px;font-size:1rem;">分享检测链接</h3>
       <p style="color:#8b90a0;font-size:0.85rem;margin:0 0 12px;">链接已自动复制到剪贴板，也可手动选择复制：</p>
       <input type="text" value="${_escHtml(url)}" readonly
         style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #2e3340;background:#272b35;color:#c0c4d0;font-size:0.85rem;box-sizing:border-box;"
@@ -597,13 +620,73 @@ $('btnUrlScrollTop').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+// Translation button for news summary
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'btnTranslateSummary') {
+    const btn = e.target;
+    const summaryEl = $('urlPageSummary');
+    const translatedEl = $('urlSummaryTranslated');
+    if (!summaryEl || !translatedEl) return;
+    const text = summaryEl.textContent.trim();
+    if (!text) return;
+    btn.disabled = true;
+    btn.textContent = '翻译中...';
+    translatedEl.style.display = 'block';
+    translatedEl.textContent = '';
+    fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }).then(res => {
+      if (!res.ok || !res.body) {
+        translatedEl.textContent = '翻译失败';
+        btn.disabled = false;
+        btn.textContent = '重新翻译';
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+      function read() {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            btn.textContent = '重新翻译';
+            btn.disabled = false;
+            return;
+          }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6);
+            if (data === '[DONE]') { btn.textContent = '重新翻译'; btn.disabled = false; return; }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.error) { translatedEl.textContent = '翻译失败：' + parsed.error; btn.disabled = false; btn.textContent = '重新翻译'; return; }
+              if (parsed.chunk) { fullText += parsed.chunk; translatedEl.textContent = fullText; }
+            } catch {}
+          }
+          read();
+        });
+      }
+      read();
+    }).catch(() => {
+      translatedEl.textContent = '翻译失败';
+      btn.disabled = false;
+      btn.textContent = '重新翻译';
+    });
+  }
+});
+
 function updateBatchAccess(){
   const raw=localStorage.getItem(AUTH_USER_KEY);
   const role=raw?JSON.parse(raw).role:null;
   const allow=role==='auditor'||role==='admin';
   const hint=$('batchAuthHint');
-  if(!raw){hint.hidden=false;hint.querySelector('p').textContent='⚠️ 批量检测需要登录';
-  }else if(!allow){hint.hidden=false;hint.querySelector('p').innerHTML='⚠️ 需要 auditor / admin';
+  if(!raw){hint.hidden=false;hint.querySelector('p').textContent='批量检测需要登录';
+  }else if(!allow){hint.hidden=false;hint.querySelector('p').innerHTML='需要 auditor / admin';
   }else{hint.hidden=true;}
 }
 
@@ -759,7 +842,7 @@ async function handleBatchFiles(fileList){
   const raw=localStorage.getItem(AUTH_USER_KEY);
   const role=raw?JSON.parse(raw).role:null;
   if(role!=='auditor'&&role!=='admin'){
-    setStatus($('batchStatus'),'⚠️ 需要 auditor / admin 权限','error');
+    setStatus($('batchStatus'),'需要 auditor / admin 权限','error');
     return;
   }
   if(_batchRunning)return;
@@ -767,7 +850,7 @@ async function handleBatchFiles(fileList){
 
   const allFiles=[...fileList].filter(f=>_ACCEPTED_RE.test(f.name)||f.type.startsWith('image/'));
   if(allFiles.length>50){
-    setStatus($('batchStatus'),`⚠️ 已自动截取前 50 个文件（共选择 ${allFiles.length} 个）`,'warn');
+    setStatus($('batchStatus'),`已自动截取前 50 个文件（共选择 ${allFiles.length} 个）`,'warn');
   }
   const files=allFiles.slice(0,50);
   if(!files.length){_batchRunning=false;return;}
@@ -794,7 +877,7 @@ async function handleBatchFiles(fileList){
     const initData=await initRes.json();
     jobId=initData.job_id;
   }catch(e){
-    setStatus($('batchStatus'),'❌ 初始化失败','error');
+    setStatus($('batchStatus'),'初始化失败','error');
     resetBatchZone();
     return;
   }
@@ -831,7 +914,7 @@ async function handleBatchFiles(fileList){
           group.className='batch-source-group';
           group.open=true;
           const summary=document.createElement('summary');
-          summary.textContent='📄 '+d.source;
+          summary.textContent=d.source;
           group.appendChild(summary);
           const inner=document.createElement('div');
           inner.className='gallery batch-source-gallery';
@@ -867,13 +950,13 @@ async function handleBatchFiles(fileList){
       _updateBatchStatsFromResult(r);
 
     }else if(d.type==='item_skip'){
-      const skipCard=`<div class="gallery-card skip-card"><div class="gallery-card__body"><span class="gallery-card__badge" style="background:#2e3340;color:#8b90a0">⏭️ 跳过</span><p class="gallery-card__conf">${d.filename||''}</p><p style="font-size:0.82rem;color:#8b90a0;margin:4px 0 0">${d.reason||''}</p></div></div>`;
+      const skipCard=`<div class="gallery-card skip-card"><div class="gallery-card__body"><span class="gallery-card__badge" style="background:#2e3340;color:#8b90a0">跳过</span><p class="gallery-card__conf">${d.filename||''}</p><p style="font-size:0.82rem;color:#8b90a0;margin:4px 0 0">${d.reason||''}</p></div></div>`;
       g.insertAdjacentHTML('beforeend',skipCard);
 
     }else if(d.type==='complete'){
       $('detectProgressBar').classList.add('complete');
       _batchIndexOffset+=totalImages;  // 累加，供下一批使用
-      setStatus($('batchStatus'),`✅ 本批检测完成 ${d.count} 张，累计 ${_batchIndexOffset} 张`,'success');
+      setStatus($('batchStatus'),`本批检测完成 ${d.count} 张，累计 ${_batchIndexOffset} 张`,'success');
       _batchRunning=false;
       _batchWs=null;
     }
@@ -881,7 +964,7 @@ async function handleBatchFiles(fileList){
 
   ws.onerror=function(){
     if(_batchRunning){
-      setStatus($('batchStatus'),'❌ WebSocket 连接失败','error');
+      setStatus($('batchStatus'),'WebSocket 连接失败','error');
       _batchRunning=false;
       _batchWs=null;
     }
@@ -911,11 +994,11 @@ async function handleBatchFiles(fileList){
     }
   };
   xhr.onload=function(){
-    $('uploadLabel').textContent='上传完成 ✓';
+    $('uploadLabel').textContent='上传完成';
     $('uploadProgressBar').style.width='100%';
   };
   xhr.onerror=function(){
-    setStatus($('batchStatus'),'❌ 上传失败','error');
+    setStatus($('batchStatus'),'上传失败','error');
     resetBatchZone();
   };
   // 等 WebSocket 建立后再发送文件，避免缓存命中时处理完成早于 WS 连接（403 竞态）
@@ -976,7 +1059,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('btnMarkMisjudge').addEventListener('click', () => {
     if (!lastDetectionId) {
       openActionModal(`<div style="text-align:center;padding:24px">
-        <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+        <div style="font-size:1rem;font-weight:600;color:#f59e0b;margin-bottom:12px">提示</div>
         <p style="color:#c0c4d0;margin:0 0 16px">无检测记录，请先对图片进行检测</p>
         <button class="btn-detect" id="btnActionConfirm" style="width:100%">确定</button>
       </div>`);
@@ -987,7 +1070,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const detectedColor = lastDetectionLabel === 'FAKE' ? '#f87171' : '#4ade80';
     openActionModal(`
       <div style="padding:20px">
-        <h3 style="color:#e4e6ed;margin:0 0 12px;font-size:1rem">🚨 标记误判</h3>
+        <h3 style="color:#e4e6ed;margin:0 0 12px;font-size:1rem">标记误判</h3>
         <p style="color:#8b90a0;font-size:0.85rem;margin:0 0 16px">AI 判定为
           <strong style="color:${detectedColor}">${detectedZh}</strong>，您认为实际应该是：</p>
         <div style="display:flex;gap:10px;margin-bottom:14px">
@@ -1029,7 +1112,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         if (!res.ok) { errEl.textContent = resp.detail || '提交失败'; btn.disabled = false; btn.textContent = '提交反馈'; return; }
         actionModalContent.innerHTML = `
           <div style="text-align:center;padding:28px">
-            <div style="font-size:52px;margin-bottom:14px">✅</div>
+            <div style="font-size:1rem;font-weight:600;color:#22c55e;margin-bottom:14px">提交成功</div>
             <h3 style="color:#e4e6ed;margin:0 0 8px">感谢反馈</h3>
             <p style="color:#8b90a0;margin:0">您的反馈将帮助改进检测准确率</p>
             <button class="btn-detect" id="btnActionConfirm" style="margin-top:20px;width:100%">确定</button>
@@ -1224,7 +1307,7 @@ async function loadAdminDashboard() {
       return;
     }
     const sc = $('adminStatsCards');
-    if (sc) sc.innerHTML = '<div class="admin-stat-card"><div class="admin-stat-label" style="color:#f87171">⚠️ \u6570\u636e\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5</div></div>';
+    if (sc) sc.innerHTML = '<div class="admin-stat-card"><div class="admin-stat-label" style="color:#f87171">\u6570\u636e\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5</div></div>';
   }
 }
 
@@ -1441,4 +1524,595 @@ if (_btnIntegrate) {
       _btnIntegrate.textContent = '\ud83d\udce6 \u96c6\u6210\u5230\u8bad\u7ec3\u96c6';
     }
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─ AI Analysis Panel & Image Download Features ─
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Generate session ID at page load
+const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+let currentDetectionId = null;
+let analysisHistory = [];  // 保存该检测的分析历史[{question, answer, timestamp}]
+
+function resetAnalysisPanel() {
+  const panel = $('analysisQuestion');
+  if (panel) panel.value = '';
+  const error = $('analysisError');
+  if (error) error.hidden = true;
+  analysisHistory = [];
+  const container = $('chatContainer');
+  if (container) container.innerHTML = '';
+}
+
+// 将历史记录渲染为对话气泡
+function renderAnalysisHistory() {
+  const container = $('chatContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  analysisHistory.forEach(item => {
+    appendChatMessage('user', item.question);
+    appendChatMessage('ai', item.answer);
+  });
+}
+
+// HTML转义（用于用户消息气泡）
+function escapeHtml(text) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// 轻量 Markdown 渲染（用于 AI 回复气泡）
+function renderMarkdown(text) {
+  // 先转义原始 HTML，防止 XSS
+  let out = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 代码块 (```...```)
+  out = out.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) =>
+    `<pre><code>${code.trim()}</code></pre>`
+  );
+
+  // 行内代码
+  out = out.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+  // 标题
+  out = out.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  out = out.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  out = out.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+
+  // 粗体 & 斜体
+  out = out.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+  // 无序列表（连续以 - / * / + 开头的行）
+  out = out.replace(/((?:^[*\-+] .+\n?)+)/gm, block => {
+    const items = block.trim().split('\n')
+      .map(l => `<li>${l.replace(/^[*\-+] /, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+
+  // 有序列表
+  out = out.replace(/((?:^\d+\. .+\n?)+)/gm, block => {
+    const items = block.trim().split('\n')
+      .map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+
+  // 段落（双换行）
+  out = out.replace(/\n{2,}/g, '</p><p>');
+  out = '<p>' + out + '</p>';
+
+  // 修正：块级元素外层不套 <p>
+  out = out.replace(/<p>(<(?:ul|ol|pre|h[1-6])[^>]*>)/g, '$1');
+  out = out.replace(/(<\/(?:ul|ol|pre|h[1-6])>)<\/p>/g, '$1');
+
+  // 段落内单换行 → <br>
+  out = out.replace(/\n/g, '<br>');
+
+  // 清除空段落
+  out = out.replace(/<p>\s*<\/p>/g, '');
+  out = out.replace(/<p><br><\/p>/g, '');
+
+  return out;
+}
+
+// 向 chatContainer 追加一条消息并返回关键元素
+function appendChatMessage(role, text, isStreaming = false) {
+  const container = $('chatContainer');
+  if (!container) return null;
+
+  if (role === 'user') {
+    const row = document.createElement('div');
+    row.className = 'chat-msg-user';
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble-user';
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    container.appendChild(row);
+    scrollChatToBottom();
+    return row;
+  }
+
+  if (role === 'typing') {
+    const row = document.createElement('div');
+    row.className = 'chat-msg-ai chat-typing';
+    row.innerHTML = `
+      <div class="chat-avatar">AI</div>
+      <div class="chat-bubble-ai">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>`;
+    container.appendChild(row);
+    scrollChatToBottom();
+    return row;
+  }
+
+  if (role === 'ai') {
+    const row = document.createElement('div');
+    row.className = 'chat-msg-ai';
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-bubble-ai-wrap';
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble-ai';
+    if (isStreaming) {
+      // 流式阶段显示纯文本，完成后替换为渲染后的 Markdown
+      bubble.textContent = text;
+    } else {
+      bubble.innerHTML = renderMarkdown(text);
+      addExpandButton(wrap, bubble);
+    }
+    wrap.appendChild(bubble);
+    row.innerHTML = '<div class="chat-avatar">AI</div>';
+    row.appendChild(wrap);
+    container.appendChild(row);
+    scrollChatToBottom();
+    return { row, bubble, wrap };
+  }
+
+  return null;
+}
+
+// 若气泡内容过长则折叠并加"展开全文"按钮
+function addExpandButton(wrap, bubble) {
+  setTimeout(() => {
+    if (bubble.scrollHeight > 200) {
+      bubble.classList.add('is-collapsed');
+      const btn = document.createElement('button');
+      btn.className = 'btn-expand-msg';
+      btn.textContent = '展开全文 ▼';
+      btn.addEventListener('click', () => {
+        if (bubble.classList.contains('is-collapsed')) {
+          bubble.classList.remove('is-collapsed');
+          btn.textContent = '收起 ▲';
+        } else {
+          bubble.classList.add('is-collapsed');
+          btn.textContent = '展开全文 ▼';
+        }
+      });
+      wrap.appendChild(btn);
+    }
+  }, 0);
+}
+
+function scrollChatToBottom() {
+  const container = $('chatContainer');
+  if (container) container.scrollTop = container.scrollHeight;
+}
+
+// 加载分析历史
+async function loadAnalysisHistory(detectionId) {
+  try {
+    const response = await fetch(
+      `/api/detection/${detectionId}/analysis-history?session_id=${encodeURIComponent(sessionId)}`
+    );
+    const data = await response.json();
+    if (data.history && data.history.length > 0) {
+      analysisHistory = data.history;
+      renderAnalysisHistory();
+    }
+  } catch (e) {
+    console.error('Failed to load analysis history:', e);
+  }
+}
+
+// AI Analysis button click - SSE streaming
+if ($('btnAnalyze')) {
+  $('btnAnalyze').addEventListener('click', initiateAnalysis);
+}
+
+function initiateAnalysis() {
+  const question = $('analysisQuestion').value.trim();
+  if (!question) {
+    showToast('请输入你的问题', 'error');
+    return;
+  }
+
+  if (!currentDetectionId) {
+    showToast('请先完成一次检测', 'error');
+    return;
+  }
+
+  $('analysisQuestion').value = '';
+  const error = $('analysisError');
+  if (error) error.hidden = true;
+  streamAnalysis(currentDetectionId, question);
+}
+
+function streamAnalysis(detectionId, question) {
+  // 立即追加用户气泡
+  appendChatMessage('user', question);
+
+  // 显示打字动画气泡
+  const typingRow = appendChatMessage('typing', '');
+
+  const eventSource = new EventSource(
+    `/api/detection/${detectionId}/analyze?question=${encodeURIComponent(question)}&session_id=${encodeURIComponent(sessionId)}`
+  );
+
+  let fullResponse = '';
+  let aiBubble = null;
+  let aiWrap = null;
+
+  eventSource.onmessage = (event) => {
+    const data = event.data;
+
+    if (data === '[DONE]') {
+      eventSource.close();
+      // 移除打字动画，渲染最终 Markdown
+      if (typingRow && typingRow.parentNode) typingRow.remove();
+      if (aiBubble) {
+        aiBubble.innerHTML = renderMarkdown(fullResponse);
+        addExpandButton(aiWrap, aiBubble);
+      } else {
+        appendChatMessage('ai', fullResponse);
+      }
+      analysisHistory.push({ question, answer: fullResponse, timestamp: new Date().toISOString() });
+      scrollChatToBottom();
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed.error) {
+        if (typingRow && typingRow.parentNode) typingRow.remove();
+        const error = $('analysisError');
+        if (error) { error.textContent = parsed.error; error.hidden = false; }
+      } else if (parsed.chunk) {
+        fullResponse += parsed.chunk;
+        if (!aiBubble) {
+          // 第一个 chunk：用 AI 气泡替换打字动画
+          if (typingRow && typingRow.parentNode) typingRow.remove();
+          const result = appendChatMessage('ai', fullResponse, true);
+          aiBubble = result.bubble;
+          aiWrap = result.wrap;
+        } else {
+          aiBubble.textContent = fullResponse;
+        }
+        scrollChatToBottom();
+      }
+    } catch (e) {
+      fullResponse += data;
+      if (!aiBubble) {
+        if (typingRow && typingRow.parentNode) typingRow.remove();
+        const result = appendChatMessage('ai', fullResponse, true);
+        aiBubble = result.bubble;
+        aiWrap = result.wrap;
+      } else {
+        aiBubble.textContent = fullResponse;
+      }
+      scrollChatToBottom();
+    }
+  };
+
+  eventSource.onerror = () => {
+    eventSource.close();
+    if (typingRow && typingRow.parentNode) typingRow.remove();
+    const error = $('analysisError');
+    if (error) { error.hidden = false; error.textContent = '分析失败：网络连接异常'; }
+  };
+}
+
+
+// Gallery image operations - add overlay buttons, checkboxes, and context menu
+let selectedCards = new Set();  // 记录选中的卡片索引
+
+function enhanceGalleryCards() {
+  const cards = document.querySelectorAll('.gallery-card');
+
+  cards.forEach((card, idx) => {
+    // 删除现有的复选框（如果有）
+    const existing = card.querySelector('.gallery-card__checkbox');
+    if (existing) existing.remove();
+
+    // 添加复选框
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'gallery-card__checkbox';
+    checkbox.dataset.idx = idx;
+
+    checkbox.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        selectedCards.add(idx);
+        card.classList.add('selected');
+      } else {
+        selectedCards.delete(idx);
+        card.classList.remove('selected');
+      }
+      updateBatchDownloadBtn();
+    });
+
+    card.appendChild(checkbox);
+
+    // Remove existing overlay if any
+    const existing_overlay = card.querySelector('.gallery-overlay');
+    if (existing_overlay) existing_overlay.remove();
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'gallery-overlay';
+    overlay.innerHTML = `
+      <button class="gallery-btn btn-copy-clip" title="复制图片">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+        </svg>
+        复制
+      </button>
+      <button class="gallery-btn btn-download" title="下载图片">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        下载
+      </button>
+      <button class="gallery-btn btn-url-show" title="查看图片URL">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M13.828 10.172a4 4 0 0 0-5.656 0l-4.243 4.243a4 4 0 1 0 5.656 5.656l1.102-1.101m-.758-4.899a4 4 0 0 0 5.656 0l4.243-4.243a4 4 0 0 0-5.656-5.656l-1.1 1.1"></path>
+        </svg>
+        URL
+      </button>
+    `;
+
+    // Get original image URL from data attribute
+    const img = card.querySelector('img');
+    const imgUrl = img ? img.dataset.imgUrl || img.src : '';
+
+    // Copy button handler
+    overlay.querySelector('.btn-copy-clip').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await copyImageToClipboard(imgUrl);
+    });
+
+    // Download button handler
+    overlay.querySelector('.btn-download').addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadSingleImage(imgUrl);
+    });
+
+    // URL button handler
+    overlay.querySelector('.btn-url-show').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showImageUrl(imgUrl);
+    });
+
+    // 右键菜单
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showContextMenu(e.pageX, e.pageY, {
+        url: imgUrl,
+        cardElement: card,
+        cardIndex: idx,
+        selectedCount: selectedCards.size
+      });
+    });
+
+    card.appendChild(overlay);
+  });
+}
+
+// 复制图片到剪贴板
+async function copyImageToClipboard(url) {
+  try {
+    if (!url) {
+      showToast('无效的图片URL');
+      return;
+    }
+    const blob = await fetch(`/api/image/download?url=${encodeURIComponent(url)}`).then(r => r.blob());
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob })
+    ]);
+    showToast('已复制到剪贴板');
+  } catch (err) {
+    console.error('Copy error:', err);
+    showToast('复制失败');
+  }
+}
+
+// 下载单张图片
+function downloadSingleImage(imgUrl) {
+  if (imgUrl) {
+    window.location.href = `/api/image/download?url=${encodeURIComponent(imgUrl)}`;
+  } else {
+    showToast('无效的图片URL');
+  }
+}
+
+// 显示图片URL
+function showImageUrl(imgUrl) {
+  if (imgUrl) {
+    const modal = $('actionModal');
+    if (modal) {
+      openActionModal(`
+        <h3>图片原始 URL</h3>
+        <p style="word-break: break-all; font-size: 0.85rem; color: #8b90a0;">
+          <code>${escapeHtml(imgUrl)}</code>
+        </p>
+        <button class="btn-secondary" onclick="navigator.clipboard.writeText('${imgUrl.replace(/'/g, "\\'")}').then(() => showToast('URL已复制')).catch(() => showToast('复制失败'))">复制URL</button>
+      `);
+    }
+  }
+}
+
+// 右键菜单实现
+function showContextMenu(x, y, data) {
+  const old = document.querySelector('.context-menu');
+  if (old) old.remove();
+
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+
+  menu.innerHTML = `
+    <button class="context-menu-item" data-action="copy">复制图片</button>
+    <button class="context-menu-item" data-action="download">下载图片</button>
+    <button class="context-menu-item" data-action="open">在新标签打开</button>
+    <div class="divider"></div>
+    <button class="context-menu-item" data-action="select-all">✓ 全选</button>
+    <button class="context-menu-item" data-action="batch-download">批量下载 (${data.selectedCount})</button>
+  `;
+
+  menu.querySelectorAll('.context-menu-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      handleContextMenuAction(action, data);
+      menu.remove();
+      // 移除点击监听
+      document.removeEventListener('click', closeMenu);
+    });
+  });
+
+  document.body.appendChild(menu);
+
+  // 点击其他地方关闭菜单
+  const closeMenu = function(e) {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+  };
+
+  setTimeout(() => {
+    document.addEventListener('click', closeMenu);
+  }, 0);
+}
+
+// 处理右键菜单操作
+function handleContextMenuAction(action, data) {
+  switch(action) {
+    case 'copy':
+      copyImageToClipboard(data.url);
+      break;
+    case 'download':
+      downloadSingleImage(data.url);
+      break;
+    case 'open':
+      window.open(data.url, '_blank');
+      break;
+    case 'select-all':
+      selectAllGalleryCards();
+      break;
+    case 'batch-download':
+      performBatchDownload();
+      break;
+  }
+}
+
+// 全选所有图片
+function selectAllGalleryCards() {
+  document.querySelectorAll('.gallery-card__checkbox').forEach(cb => {
+    cb.checked = true;
+    cb.dispatchEvent(new Event('change'));
+  });
+}
+
+// 取消全选
+function deselectAllGalleryCards() {
+  document.querySelectorAll('.gallery-card__checkbox').forEach(cb => {
+    cb.checked = false;
+    cb.dispatchEvent(new Event('change'));
+  });
+}
+
+// 批量下载
+function performBatchDownload() {
+  const cards = document.querySelectorAll('.gallery-card');
+  const urls = Array.from(selectedCards).map(idx => {
+    const img = cards[idx].querySelector('img');
+    return img?.dataset.imgUrl || img?.src || '';
+  }).filter(Boolean);
+
+  if (urls.length === 0) {
+    showToast('未选择任何图片');
+    return;
+  }
+
+  try {
+    const urlParam = JSON.stringify(urls);
+    window.location.href = `/api/images/batch-download?urls=${encodeURIComponent(urlParam)}`;
+  } catch (e) {
+    showToast('批量下载失败：' + e.message);
+  }
+}
+
+// 更新批量下载按钮状态
+function updateBatchDownloadBtn() {
+  // 可以根据需要添加更新UI的逻辑
+}
+
+// Monkey-patch the gallery update function to include enhanced cards
+const originalGalleryUpdate = window.updateGallery || (() => {});
+window.updateGallery = function() {
+  originalGalleryUpdate.apply(this, arguments);
+  setTimeout(enhanceGalleryCards, 100);
+};
+
+// Also enhance cards when URL detection completes
+const originalUrlDetect = btnUrl ? btnUrl.onclick : null;
+if (btnUrl) {
+  btnUrl.addEventListener('click', async () => {
+    // ... (original URL detection logic)
+    // After gallery is rendered, enhance cards
+    setTimeout(() => {
+      enhanceGalleryCards();
+    }, 500);
+  }, { once: false });
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Toast notification
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #2e3340;
+    color: #e4e6ed;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 9999;
+    animation: fadeSlideIn 0.2s ease-out;
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.2s';
+    setTimeout(() => toast.remove(), 200);
+  }, 3000);
 }
