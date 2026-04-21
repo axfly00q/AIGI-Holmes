@@ -228,7 +228,10 @@ function switchToTab(tabName) {
   const pane = $('tab-' + tabName);
   if (pane) pane.classList.add('active');
   if ($('topBarTitle')) $('topBarTitle').textContent = _tabTitles[tabName] || tabName;
-  // When switching to history tab, load my records if needed
+  // URL 顶部栏控件：仅新闻检测页显示
+  const _utc = $('urlTopbarControls');
+  if (_utc) _utc.hidden = (tabName !== 'url');
+  // 切换页时隐藏顶部检测结果（防止确认提示遗留）
   if (tabName === 'history') {
     const raw = localStorage.getItem(AUTH_USER_KEY);
     if (!raw) {
@@ -459,7 +462,7 @@ function buildGalleryCard(it){
   }).join('');
   // 点击按钮时调用 _searchFromCard(this) 来读取 data-category
   const searchBtn = `<button class="gallery-card__search-similar" data-category="${_escHtml(it.category || '')}" onclick="_searchFromCard(this)" title="用文章标题和图片类别在网络查找类似图片">查找类似图片</button>`;
-  return `<div class="gallery-card"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}<div class="gallery-card__mini-bars">${mb}</div>${searchBtn}</div></div>`;
+  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}<div class="gallery-card__mini-bars">${mb}</div>${searchBtn}</div></div>`;
 }
 function buildReportRow(it){
   const c=it.label==='REAL'?'real':'fake';
@@ -572,9 +575,21 @@ function renderUrlAnalysis(d) {
 
   // Render stats
   const dim = d.dimensions || {};
-  $('urlStatsTotal').textContent = dim.image_count || d.count;
-  $('urlStatsReal').textContent = dim.real_count || 0;
-  $('urlStatsFake').textContent = dim.fake_count || 0;
+  const _total = dim.image_count || d.count || 0;
+  const _real  = dim.real_count  || 0;
+  const _fake  = dim.fake_count  || 0;
+  $('urlStatsTotal').textContent = _total;
+  $('urlStatsReal').textContent  = _real;
+  $('urlStatsFake').textContent  = _fake;
+
+  // Status pills in summary panel
+  const pillsEl = $('urlStatusPills');
+  if (pillsEl) {
+    pillsEl.innerHTML =
+      `<span class="url-status-pill url-status-pill--total">共 ${_total} 张</span>` +
+      `<span class="url-status-pill url-status-pill--real">真实 ${_real} 张</span>` +
+      (_fake > 0 ? `<span class="url-status-pill url-status-pill--fake">AI生成 ${_fake} 张</span>` : '');
+  }
 
   // Score circle
   const score = d.overall_score || 0;
@@ -587,47 +602,23 @@ function renderUrlAnalysis(d) {
   arc.style.stroke = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444';
   scoreEl.style.color = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444';
 
-  // Radar chart
-  if (!_urlRadarChart && typeof echarts !== 'undefined') {
-    _urlRadarChart = echarts.init($('urlRadarChart'), null, {renderer:'canvas'});
-  }
-  if (_urlRadarChart) {
-    _urlRadarChart.setOption({
-      backgroundColor: 'transparent',
-      tooltip: {trigger:'item'},
-      radar: {
-        indicator: [
-          {name:'真实性', max:100},
-          {name:'置信度', max:100},
-          {name:'图文一致', max:100},
-          {name:'公章完整性', max:100},
-          {name:'频率自然性', max:100},
-          {name:'边界一致性', max:100},
-        ],
-        shape: 'polygon',
-        axisLine: {lineStyle:{color:'#e2e8f0'}},
-        splitLine: {lineStyle:{color:'#e2e8f0'}},
-        splitArea: {areaStyle:{color:['#f8fafc','#f1f5f9']}},
-        axisName: {color:'#64748b', fontSize:11},
-      },
-      series: [{
-        type: 'radar',
-        data: [{
-          name: '分析结果',
-          value: [
-            dim.authenticity || 0,
-            dim.confidence || 0,
-            dim.consistency || 50,
-            dim.seal || 50,
-            dim.frequency || 50,
-            dim.edge || 50,
-          ],
-          lineStyle: {color:'#60a5fa'},
-          areaStyle: {color:'rgba(96,165,250,0.2)'},
-          itemStyle: {color:'#60a5fa'},
-        }],
-      }],
-    });
+  // 多维度分析—水平进度条（替换雷达图）
+  const _dimData = [
+    { label: '真实性', value: dim.authenticity || 0 },
+    { label: '置信度', value: dim.confidence || 0 },
+    { label: '边界一致', value: dim.edge || 50 },
+    { label: '图文一致', value: dim.consistency || 50 },
+    { label: '公章完整', value: dim.seal || 50 },
+  ];
+  const dimBarsEl = $('urlDimBars');
+  if (dimBarsEl) {
+    dimBarsEl.innerHTML = _dimData.map(d => {
+      const col = d.value >= 70 ? '#22c55e' : d.value >= 40 ? '#f59e0b' : '#ef4444';
+      return `<div class="url-dim-row"><span class="url-dim-label">${d.label}</span><div class="url-dim-track"><div class="url-dim-fill" style="width:0%;background:${col}" data-score="${Math.round(d.value)}"></div></div><span class="url-dim-score">${Math.round(d.value)}%</span></div>`;
+    }).join('');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      dimBarsEl.querySelectorAll('.url-dim-fill').forEach(el => el.style.width = el.dataset.score + '%');
+    }));
   }
 
   // Consistency bar
@@ -874,58 +865,101 @@ function _updateBatchStatsFromResult(r){
   _refreshStatsPanel();
 }
 
+function _drawBatchRadar() {
+  const svg = $('batchRadarSvg');
+  if (!svg) return;
+  const W = 200, H = 200, cx = W / 2, cy = H / 2, R = 72;
+  const N = _BATCH_CATS.length;
+  const angles = _BATCH_CATS.map((_, i) => (i / N) * 2 * Math.PI - Math.PI / 2);
+
+  const realVals = _BATCH_CATS.map(c => {
+    const d = _batchStats.cats[c];
+    return d.c ? Math.min(1, d.r / d.c / 100) : 0;
+  });
+  const fakeVals = _BATCH_CATS.map(c => {
+    const d = _batchStats.cats[c];
+    return d.c ? Math.min(1, d.f / d.c / 100) : 0;
+  });
+  const hasData = _batchStats.total > 0;
+
+  function polyPts(vals) {
+    return vals.map((v, i) => {
+      const r = v * R;
+      return `${(cx + r * Math.cos(angles[i])).toFixed(2)},${(cy + r * Math.sin(angles[i])).toFixed(2)}`;
+    }).join(' ');
+  }
+
+  let html = '';
+  // Grid
+  [0.25, 0.5, 0.75, 1].forEach(scale => {
+    const pts = angles.map(a =>
+      `${(cx + scale * R * Math.cos(a)).toFixed(2)},${(cy + scale * R * Math.sin(a)).toFixed(2)}`
+    ).join(' ');
+    html += `<polygon points="${pts}" fill="none" stroke="#e2e8f0" stroke-width="0.8"/>`;
+  });
+  // Axes + labels
+  angles.forEach((a, i) => {
+    const x2 = (cx + R * Math.cos(a)).toFixed(2);
+    const y2 = (cy + R * Math.sin(a)).toFixed(2);
+    html += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="#e2e8f0" stroke-width="0.8"/>`;
+    const lx = (cx + (R + 16) * Math.cos(a)).toFixed(2);
+    const ly = (cy + (R + 16) * Math.sin(a)).toFixed(2);
+    html += `<text x="${lx}" y="${ly}" font-size="9.5" fill="#94a3b8" text-anchor="middle" dominant-baseline="middle">${_BATCH_CATS[i]}</text>`;
+  });
+  // Data polygons
+  if (hasData) {
+    html += `<polygon points="${polyPts(realVals)}" fill="rgba(34,197,94,0.18)" stroke="#22c55e" stroke-width="1.8" stroke-linejoin="round"/>`;
+    html += `<polygon points="${polyPts(fakeVals)}" fill="rgba(239,68,68,0.13)" stroke="#ef4444" stroke-width="1.8" stroke-linejoin="round"/>`;
+    // Dot vertices
+    realVals.forEach((v, i) => {
+      const r = v * R;
+      const px = (cx + r * Math.cos(angles[i])).toFixed(2);
+      const py = (cy + r * Math.sin(angles[i])).toFixed(2);
+      if (v > 0) html += `<circle cx="${px}" cy="${py}" r="2.5" fill="#22c55e"/>`;
+    });
+    fakeVals.forEach((v, i) => {
+      const r = v * R;
+      const px = (cx + r * Math.cos(angles[i])).toFixed(2);
+      const py = (cy + r * Math.sin(angles[i])).toFixed(2);
+      if (v > 0) html += `<circle cx="${px}" cy="${py}" r="2.5" fill="#ef4444"/>`;
+    });
+  } else {
+    // Placeholder text
+    html += `<text x="${cx}" y="${cy}" font-size="10" fill="#cbd5e1" text-anchor="middle" dominant-baseline="middle">暂无数据</text>`;
+  }
+  svg.innerHTML = html;
+}
+
 function _refreshStatsPanel(){
   // 首次调用时展开两栏布局
   const layout=$('batchResultLayout');
   if(layout.hidden){
     layout.hidden=false;
-    // 容器可见后初始化雷达图
-    if(!_radarChart&&typeof echarts!=='undefined'){
-      _radarChart=echarts.init($('statsRadar'),null,{renderer:'canvas'});
-      _radarChart.setOption({
-        backgroundColor:'transparent',
-        tooltip:{trigger:'item'},
-        legend:{bottom:0,textStyle:{color:'#64748b',fontSize:11},data:['真实照片','AI生成']},
-        radar:{
-          indicator:_BATCH_CATS.map(c=>({name:c,max:100})),
-          shape:'polygon',
-          axisLine:{lineStyle:{color:'#e2e8f0'}},
-          splitLine:{lineStyle:{color:'#e2e8f0'}},
-          splitArea:{areaStyle:{color:['#f8fafc','#f1f5f9']}},
-          axisName:{color:'#64748b',fontSize:11}
-        },
-        series:[{
-          type:'radar',
-          data:[
-            {name:'真实照片',value:[0,0,0,0,0,0,0],
-             lineStyle:{color:'#4ade80'},areaStyle:{color:'rgba(74,222,128,0.15)'},
-             itemStyle:{color:'#4ade80'}},
-            {name:'AI生成',value:[0,0,0,0,0,0,0],
-             lineStyle:{color:'#f87171'},areaStyle:{color:'rgba(248,113,113,0.15)'},
-             itemStyle:{color:'#f87171'}}
-          ]
-        }]
-      });
-    }
   }
   // 可信率
   const avg=_batchStats.total?Math.round(_batchStats.confSum/_batchStats.total):0;
   const valEl=$('statsCredibility');
   valEl.textContent=avg;
-  valEl.style.color=avg>=70?'#4ade80':(avg>=40?'#f97316':'#f87171');
+  valEl.style.color=avg>=70?'#22c55e':(avg>=40?'#f97316':'#ef4444');
   $('statsTotal').textContent=_batchStats.total;
   $('statsReal').textContent=_batchStats.realCount;
   $('statsFake').textContent=_batchStats.fakeCount;
-  // 雷达图实时刷新
-  if(_radarChart){
-    const realVals=_BATCH_CATS.map(c=>{const d=_batchStats.cats[c];return d.c?Math.round(d.r/d.c):0;});
-    const fakeVals=_BATCH_CATS.map(c=>{const d=_batchStats.cats[c];return d.c?Math.round(d.f/d.c):0;});
-    _radarChart.setOption({series:[{data:[{value:realVals},{value:fakeVals}]}]});
-  }
+  // 维度均值进度条
+  const realPct=_batchStats.total?Math.round(_batchStats.realCount/_batchStats.total*100):0;
+  const fakePct=_batchStats.total?Math.round(_batchStats.fakeCount/_batchStats.total*100):0;
+  const rb=$('batchDimReal'); if(rb){rb.style.width=realPct+'%';}
+  const fb=$('batchDimFake'); if(fb){fb.style.width=fakePct+'%';}
+  const rv=$('batchDimRealVal'); if(rv) rv.textContent=realPct+'%';
+  const fv=$('batchDimFakeVal'); if(fv) fv.textContent=fakePct+'%';
+  // 导出按钮启用
+  const expBtn=$('btnBatchExportPdf');
+  if(expBtn) expBtn.disabled=(_batchStats.total===0);
   // 分类标签
   const tags=_BATCH_CATS.filter(c=>_batchStats.cats[c].c>0)
     .map(c=>`<span class="cat-tag">${c} ${_batchStats.cats[c].c}张</span>`).join('');
   $('statsCats').innerHTML=tags;
+  // 多维雷达图
+  _drawBatchRadar();
 }
 
 // 文件夹选取：使用 File System Access API，避免浏览器显示“是否上传到此站点”对话框
@@ -989,6 +1023,14 @@ function initBatchZone(){
 
   // Cancel button
   $('btnBatchCancel').addEventListener('click',resetBatchZone);
+
+  // Batch export PDF
+  const batchExportBtn = $('btnBatchExportPdf');
+  if (batchExportBtn) {
+    batchExportBtn.addEventListener('click', () => {
+      window.print();
+    });
+  }
 }
 
 async function handleBatchFiles(fileList){
@@ -1161,9 +1203,12 @@ function resetBatchZone(){
   $('statsReal').textContent='0';
   $('statsFake').textContent='0';
   $('statsCats').innerHTML='';
-  if(_radarChart){
-    _radarChart.setOption({series:[{data:[{value:[0,0,0,0,0,0,0]},{value:[0,0,0,0,0,0,0]}]}]});
-  }
+  const _rb=$('batchDimReal'); if(_rb){_rb.style.width='0%';}
+  const _fb=$('batchDimFake'); if(_fb){_fb.style.width='0%';}
+  const _rv=$('batchDimRealVal'); if(_rv) _rv.textContent='0%';
+  const _fv=$('batchDimFakeVal'); if(_fv) _fv.textContent='0%';
+  const _eb=$('btnBatchExportPdf'); if(_eb) _eb.disabled=true;
+  _drawBatchRadar();
   $('batchLanding').hidden=false;
   $('batchBar').hidden=true;
   $('batchGallery').innerHTML='';
@@ -1318,15 +1363,15 @@ function _renderPagination(container, currentPage, total, pageSize, fnName) {
   let start = Math.max(1, currentPage - 2);
   let end   = Math.min(totalPages, start + MAX_VIS - 1);
   if (end - start < MAX_VIS - 1) start = Math.max(1, end - MAX_VIS + 1);
-  let h = `<button class="page-btn" onclick="${fnName}(${Math.max(1,currentPage-1)})" ${currentPage===1?'disabled':''}>\u2039 \u4e0a\u9875</button>`;
-  if (start > 1) h += `<button class="page-btn" onclick="${fnName}(1)">1</button>`;
-  if (start > 2) h += '<span class="page-ellipsis">…</span>';
+  let btns = `<button class="page-btn" onclick="${fnName}(${Math.max(1,currentPage-1)})" ${currentPage===1?'disabled':''}>\u2039 上页</button>`;
+  if (start > 1) btns += `<button class="page-btn" onclick="${fnName}(1)">1</button>`;
+  if (start > 2) btns += '<span class="page-ellipsis">…</span>';
   for (let i = start; i <= end; i++)
-    h += `<button class="page-btn ${i===currentPage?'active':''}" onclick="${fnName}(${i})">${i}</button>`;
-  if (end < totalPages - 1) h += '<span class="page-ellipsis">…</span>';
-  if (end < totalPages) h += `<button class="page-btn" onclick="${fnName}(${totalPages})">${totalPages}</button>`;
-  h += `<button class="page-btn" onclick="${fnName}(${Math.min(totalPages,currentPage+1)})" ${currentPage===totalPages?'disabled':''}>\u4e0b\u9875 \u203a</button>`;
-  container.innerHTML = h;
+    btns += `<button class="page-btn ${i===currentPage?'active':''}" onclick="${fnName}(${i})">${i}</button>`;
+  if (end < totalPages - 1) btns += '<span class="page-ellipsis">…</span>';
+  if (end < totalPages) btns += `<button class="page-btn" onclick="${fnName}(${totalPages})">${totalPages}</button>`;
+  btns += `<button class="page-btn" onclick="${fnName}(${Math.min(totalPages,currentPage+1)})" ${currentPage===totalPages?'disabled':''}> 下页 ›</button>`;
+  container.innerHTML = `<div class="pagination-wrapper"><span class="pagination-info">第 ${currentPage} 页，共 ${totalPages} 页</span><div class="pagination-btns">${btns}</div></div>`;
 }
 
 function openAdminPanel() {
@@ -1409,27 +1454,16 @@ async function loadAdminDashboard() {
       <div class="admin-stat-card"><div class="admin-stat-num">${data.today_detections}</div><div class="admin-stat-label">今日检测</div></div>
     `;
 
-    if (data.daily_stats && data.daily_stats.length > 0 && typeof Chart !== 'undefined') {
-      const ctx = $('adminDailyChart').getContext('2d');
-      if (_adminDailyChart) _adminDailyChart.destroy();
-      _adminDailyChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: data.daily_stats.map(d => d.date),
-          datasets: [{
-            label: '检测次数', data: data.daily_stats.map(d => d.count),
-            borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)',
-            tension: 0.3, fill: true
-          }]
-        },
-        options: {
-          plugins: { legend: { labels: { color: '#64748b' } } },
-          scales: {
-            x: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
-            y: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } }
-          }
-        }
-      });
+    if (data.daily_stats && data.daily_stats.length > 0) {
+      const el = $('adminDailyChart');
+      if (el) {
+        const max = Math.max(...data.daily_stats.map(d => d.count), 1);
+        el.innerHTML = data.daily_stats.map(d => {
+          const pct = Math.max(4, Math.round(d.count / max * 100));
+          const day = d.date ? d.date.slice(5) : '';
+          return `<div class="admin-bar-col"><span class="admin-bar-value">${d.count}</span><div class="admin-bar-fill" style="height:${pct}%"></div><span class="admin-bar-label">${day}</span></div>`;
+        }).join('');
+      }
     }
 
     if (data.top_fake_scenes && data.top_fake_scenes.length > 0 && typeof Chart !== 'undefined') {
@@ -2337,10 +2371,12 @@ async function loadMyRecords(page) {
             <td title="${_escHtml(d.image_url||'')}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
               ${d.image_url ? _escHtml(d.image_url.slice(0,40)) + '…' : '本地上传'}
             </td>
-            <td><span class="admin-badge ${d.label==='FAKE'?'admin-badge--fake':'admin-badge--real'}">${d.label==='FAKE'?'AI生成':'真实'}</span></td>
+            <td class="result-cell--${d.label==='FAKE'?'fake':'real'}">${d.label==='FAKE'?'AI生成':'真实'}</td>
             <td>${Math.round(d.confidence)}%</td>
             <td>${new Date(d.created_at).toLocaleString()}</td>
-            <td><button class="admin-stats-btn" onclick="openFeedbackFromHistory(${d.id},'${d.label}')" title="标记误判">⚠️</button></td>
+            <td style="display:flex;gap:4px;align-items:center">
+              <button class="btn-detail" onclick="openFeedbackFromHistory(${d.id},'${d.label}')" title="标记误判">详情</button>
+            </td>
           </tr>`).join('')}</tbody>
         </table>`;
     }
