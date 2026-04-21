@@ -39,6 +39,11 @@ function updateAuthBar() {
     const badge = $('authRoleBadge');
     badge.textContent = u.role;
     badge.className   = 'auth-role-badge role-' + u.role;
+    // Set avatar with first character
+    const avatar = $('sidebarUserAvatar');
+    if (avatar) {
+      avatar.textContent = (u.username || 'A')[0].toUpperCase();
+    }
     $('btnShowRole').hidden = false;
     const isAdmin = u.role === 'admin';
     // Show/hide admin-only history sub-tabs

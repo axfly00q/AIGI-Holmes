@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIGI-Holmes 新闻图片真实性检测</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ cache_bust }}" />
+    <link rel="stylesheet" href="/static/css/ui-redesign.css?v={{ cache_bust }}" />
 </head>
 <body>
 
@@ -63,13 +64,16 @@
             <button class="btn-secondary" id="btnShowLogin">登录 / 注册</button>
           </div>
           <div id="authUser" hidden>
-            <div class="sidebar-user-info">
-              <span class="auth-username" id="authUsername"></span>
-              <span class="auth-role-badge" id="authRoleBadge"></span>
+            <div class="sidebar-user-row">
+              <div class="sidebar-user-avatar" id="sidebarUserAvatar">A</div>
+              <div style="flex: 1; min-width: 0;">
+                <div class="auth-username" id="authUsername">User</div>
+                <span class="auth-role-badge" id="authRoleBadge">user</span>
+              </div>
             </div>
-            <div class="sidebar-user-actions">
-              <button class="btn-secondary btn-sm" id="btnShowRole">管理</button>
-              <button class="btn-secondary btn-sm" id="btnLogout">退出</button>
+            <div class="sidebar-user-actions" style="justify-content: stretch; gap: 4px;">
+              <button class="btn-secondary btn-sm" id="btnShowRole" style="flex: 1;">管理</button>
+              <button class="btn-secondary btn-sm" id="btnLogout" style="flex: 1;">退出</button>
             </div>
           </div>
         </div>
