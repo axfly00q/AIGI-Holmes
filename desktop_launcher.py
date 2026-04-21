@@ -9,6 +9,7 @@ Usage:
 """
 
 import os
+import socket
 import sys
 import threading
 import time
@@ -44,13 +45,40 @@ if getattr(sys, "frozen", False):
 # Configuration
 # ---------------------------------------------------------------------------
 HOST            = "127.0.0.1"
-PORT            = 7860
-URL             = f"http://{HOST}:{PORT}"
+_PORT_BASE      = 7860
+_PORT_RANGE     = 10          # try 7860 … 7869
 WINDOW_TITLE    = "AIGI-Holmes — 新闻图片 AI 生成检测"
 STARTUP_TIMEOUT = 90    # seconds to wait for the server
 POLL_INTERVAL   = 0.5   # seconds between readiness checks
 
 _uvicorn_server = None  # uvicorn.Server instance (for graceful shutdown)
+PORT            = _PORT_BASE   # will be updated by _find_free_port()
+URL             = f"http://{HOST}:{PORT}"
+
+
+def _find_free_port(start: int, count: int) -> int:
+    """Return the first free TCP port in [start, start+count)."""
+    for p in range(start, start + count):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((HOST, p))
+                return p
+            except OSError:
+                continue
+    raise OSError(
+        f"No free port found in range {start}–{start + count - 1}. "
+        "Close other applications and try again."
+    )
+
+
+def _show_error(title: str, message: str) -> None:
+    """Show a Windows MessageBox (works in windowed/frozen mode)."""
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, message, title, 0x10)  # MB_ICONERROR
+    except Exception:
+        pass  # non-Windows or ctypes unavailable
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +155,15 @@ def _run_backend():
 def main() -> None:
     import traceback as _tb
 
+    global PORT, URL
+    # ── Find a free port ───────────────────────────────────────────────────
+    try:
+        PORT = _find_free_port(_PORT_BASE, _PORT_RANGE)
+    except OSError as exc:
+        _show_error("AIGI-Holmes 启动失败", str(exc))
+        sys.exit(1)
+    URL = f"http://{HOST}:{PORT}"
+
     print(f"[STARTUP] AIGI-Holmes Desktop Application", flush=True)
     print(f"[STARTUP] Python    : {sys.executable}", flush=True)
     print(f"[STARTUP] Frozen    : {getattr(sys, 'frozen', False)}", flush=True)
@@ -151,14 +188,15 @@ def main() -> None:
     # ── Wait until the server responds ────────────────────────────────────
     print(f"[STARTUP] Waiting for server (timeout={STARTUP_TIMEOUT}s) …", flush=True)
     if not _wait_for_server(URL, STARTUP_TIMEOUT, POLL_INTERVAL):
+        log_path = Path(os.environ.get("TEMP", ".")) / "AIGI-Holmes.log"
         msg = (
-            f"[ERROR] Server did not start within {STARTUP_TIMEOUT}s.\n"
-            f"  Possible causes:\n"
-            f"  • Port {PORT} is already in use\n"
-            f"  • A required Python package failed to import\n"
-            f"  Check: {Path(os.environ.get('TEMP', '.')) / 'AIGI-Holmes.log'}"
+            f"服务器在 {STARTUP_TIMEOUT} 秒内未能启动。\n\n"
+            f"可能原因：\n"
+            f"  • AI 模型加载失败（首次启动约需 15–30 秒）\n"
+            f"  • 缺少 Visual C++ 运行库\n\n"
+            f"详细日志：{log_path}"
         )
-        print(msg, flush=True)
+        _show_error("AIGI-Holmes 启动失败", msg)
         sys.exit(1)
 
     print(f"[STARTUP] Server is ready at {URL}", flush=True)

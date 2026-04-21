@@ -40,18 +40,30 @@ function updateAuthBar() {
     badge.textContent = u.role;
     badge.className   = 'auth-role-badge role-' + u.role;
     $('btnShowRole').hidden = false;
-    $('btnAdminPanel').hidden = (u.role !== 'admin');
+    const isAdmin = u.role === 'admin';
+    // Show/hide admin-only history sub-tabs
+    document.querySelectorAll('.history-tab-admin').forEach(el => {
+      el.style.display = isAdmin ? 'inline-block' : 'none';
+    });
+    // If not admin and currently on admin-panel tab, switch back to my-records
+    if (!isAdmin) {
+      const activeHistSub = document.querySelector('.history-tab-btn.active');
+      if (activeHistSub && activeHistSub.dataset.historyTab === 'admin-panel') {
+        switchHistoryTab('my-records');
+      }
+    }
   } else {
     $('authGuest').hidden = false;
     $('authUser').hidden  = true;
-    $('btnAdminPanel').hidden = true;
+    document.querySelectorAll('.history-tab-admin').forEach(el => {
+      el.style.display = 'none';
+    });
   }
   updateBatchAccess();
   if (!raw && $('reportDownload')) $('reportDownload').hidden = true;
 }
 
 $('btnShowLogin').addEventListener('click',  () => { $('loginModal').hidden = false; });
-$('btnAdminPanel').addEventListener('click', () => { openAdminPanel(); });
 $('btnModalClose').addEventListener('click', () => { $('loginModal').hidden = true;  });
 $('btnLogout').addEventListener('click',     () => { clearAuth(); });
 
@@ -198,12 +210,42 @@ async function downloadReport(id, fmt) {
   URL.revokeObjectURL(a.href);
 }
 
-document.querySelectorAll('.tab-btn').forEach(btn => {
+const _tabTitles = { upload: '上传图片', url: '新闻检测', batch: '批量检测', history: '检测历史', text: '文本检测' };
+
+function switchToTab(tabName) {
+  // Close modals if open
+  const _imgModal = $('imageSearchModal');
+  if (_imgModal && !_imgModal.hidden) _imgModal.hidden = true;
+  document.querySelectorAll('.sidebar-nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  const navItem = document.querySelector(`.sidebar-nav-item[data-tab="${tabName}"]`);
+  if (navItem) navItem.classList.add('active');
+  const pane = $('tab-' + tabName);
+  if (pane) pane.classList.add('active');
+  if ($('topBarTitle')) $('topBarTitle').textContent = _tabTitles[tabName] || tabName;
+  // When switching to history tab, load my records if needed
+  if (tabName === 'history') {
+    const raw = localStorage.getItem(AUTH_USER_KEY);
+    if (!raw) {
+      $('loginModal').hidden = false;
+      return;
+    }
+    const activeHistSub = document.querySelector('.history-tab-btn.active');
+    if (activeHistSub) {
+      const subTab = activeHistSub.dataset.historyTab;
+      if (subTab === 'my-records') loadMyRecords(1);
+      else if (subTab === 'admin-panel') {
+        const activeAdminSub = document.querySelector('.admin-sub-tab-btn.active');
+        const adminTab = activeAdminSub ? activeAdminSub.dataset.adminTab : 'dashboard';
+        _loadAdminSubTab(adminTab);
+      }
+    }
+  }
+}
+
+document.querySelectorAll('.sidebar-nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    $('tab-' + btn.dataset.tab).classList.add('active');
+    switchToTab(btn.dataset.tab);
   });
 });
 
@@ -392,6 +434,10 @@ const gallery = $('gallery');
 const reportSection = $('reportSection');
 const reportBody = $('reportBody');
 let _urlRadarChart = null;
+let _urlArticleText = '';
+let _urlTextResult = null;
+let _urlPageTitle = '';
+let _urlPageSummary = '';
 let lastDetectionId = null;   // detection_id of the last single-image result
 let lastDetectionLabel = '';  // 'FAKE' or 'REAL'
 
@@ -406,12 +452,74 @@ function buildGalleryCard(it){
     const s=Math.round(p.score);
     return `<div class="mini-row"><span class="mini-label">${p.label_zh}</span><div class="mini-track"><div class="mini-fill ${pc}" style="width:0%" data-score="${s}"></div></div><span class="mini-score">${s}%</span></div>`;
   }).join('');
-  return `<div class="gallery-card"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}<div class="gallery-card__mini-bars">${mb}</div></div></div>`;
+  // 点击按钮时调用 _searchFromCard(this) 来读取 data-category
+  const searchBtn = `<button class="gallery-card__search-similar" data-category="${_escHtml(it.category || '')}" onclick="_searchFromCard(this)" title="用文章标题和图片类别在网络查找类似图片">查找类似图片</button>`;
+  return `<div class="gallery-card"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}<div class="gallery-card__mini-bars">${mb}</div>${searchBtn}</div></div>`;
 }
 function buildReportRow(it){
   const c=it.label==='REAL'?'real':'fake';
   const conText = it.consistency ? ` · 图文一致性: ${it.consistency.assessment}(${Math.round(it.consistency.score)}%)` : '';
   return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.label_zh)}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}</span></div>`;
+}
+
+async function detectUrlText() {
+  if (!_urlArticleText) return;
+  const btn = $('btnDetectUrlText');
+  if (btn) { btn.disabled = true; btn.innerHTML = spinnerHTML() + '\u68c0\u6d4b\u4e2d…'; }
+  try {
+    const res = await fetch('/api/text/detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ text: _urlArticleText, xai_method: 'lime', num_features: 15 }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || `HTTP ${res.status}`);
+    _urlTextResult = result;
+    renderUrlTextResult(result);
+  } catch (err) {
+    showToast('\u6587\u672c\u68c0\u6d4b\u5931\u8d25\uff1a' + err.message);
+  } finally {
+    const b = $('btnDetectUrlText');
+    if (b) { b.disabled = false; b.textContent = '\u91cd\u65b0\u68c0\u6d4b'; }
+  }
+}
+
+function renderUrlTextResult(result) {
+  const wrap = $('urlTextDetectResult');
+  if (!wrap) return;
+  const isFake = result.label === 'FAKE';
+  const color = isFake ? '#ef4444' : '#22c55e';
+  const lime = result.explanations && result.explanations.lime;
+  const topKws = lime ? (lime.top_positive || []).slice(0, 8).map(t =>
+    `<span class="url-text-kw url-text-kw--fake">${(t.token||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')} <small>${(t.weight||t.contribution||0).toFixed(3)}</small></span>`
+  ).join('') : '';
+  const realKws = lime ? (lime.top_negative || []).slice(0, 5).map(t =>
+    `<span class="url-text-kw url-text-kw--real">${(t.token||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')} <small>${Math.abs(t.weight||t.contribution||0).toFixed(3)}</small></span>`
+  ).join('') : '';
+  wrap.innerHTML = `
+    <div class="url-text-result-card">
+      <div class="url-text-result-badge" style="background:${color}">${result.label_zh||result.label}</div>
+      <div class="url-text-result-info">
+        <span class="url-text-result-label">${result.label_zh||result.label}</span>
+        <span class="url-text-result-conf">置信度 ${(result.confidence||0).toFixed(1)}%</span>
+      </div>
+    </div>
+    ${(topKws||realKws) ? `<div class="url-text-kw-section">${topKws ? `<div class="url-text-kw-row"><span class="url-text-kw-title">AI 特征词：</span>${topKws}</div>` : ''}${realKws ? `<div class="url-text-kw-row"><span class="url-text-kw-title">真实特征词：</span>${realKws}</div>` : ''}</div>` : ''}
+    ${result.highlighted_html ? `<div class="url-text-highlighted"><span class="url-text-kw-title">标注文本：</span><div class="url-text-box">${result.highlighted_html}</div></div>` : ''}
+  `;
+  wrap.hidden = false;
+  _updateReportWithTextResult(result);
+}
+
+function _updateReportWithTextResult(result) {
+  const dimEl = $('reportDimensions');
+  if (!dimEl || dimEl.innerHTML === '') return;
+  const isFake = result.label === 'FAKE';
+  const color = isFake ? '#ef4444' : '#22c55e';
+  const desc = isFake ? '文章内容留1aAI生成，建议结合其他信息核实。' : '文章内容未检测到明显AI生成特征。';
+  const html = `<div class="url-text-report-row" style="margin-top:12px;padding:12px 16px;background:#f8fafc;border-radius:6px;border-left:3px solid ${color};font-size:14px;"><strong style="color:#374151;">文章文本检测：</strong><span style="color:${color};font-weight:600;margin:0 8px;">${result.label_zh||result.label}</span>· 置信度 ${(result.confidence||0).toFixed(1)}% · <span style="color:#64748b;">${desc}</span></div>`;
+  const existing = dimEl.querySelector('.url-text-report-row');
+  if (existing) { existing.outerHTML = html; } else { dimEl.insertAdjacentHTML('beforeend', html); }
 }
 
 function renderUrlAnalysis(d) {
@@ -432,6 +540,20 @@ function renderUrlAnalysis(d) {
     }
   } else {
     $('urlSummaryPanel').hidden = true;
+  }
+
+  // Text detection wrap: show if article_text available, reset state
+  _urlArticleText = d.article_text || '';
+  _urlPageTitle = d.page_title || '';
+  _urlPageSummary = d.page_summary || '';
+  _urlTextResult = null;
+  const _textWrap = $('urlTextDetectWrap');
+  if (_textWrap) {
+    _textWrap.hidden = !_urlArticleText;
+    const _tr = $('urlTextDetectResult');
+    if (_tr) { _tr.hidden = true; _tr.innerHTML = ''; }
+    const _tbtn = $('btnDetectUrlText');
+    if (_tbtn) { _tbtn.disabled = false; _tbtn.textContent = '\u68c0\u6d4b\u6587\u7ae0\u6587\u672c'; }
   }
 
   // Show analysis layout
@@ -473,13 +595,15 @@ function renderUrlAnalysis(d) {
           {name:'真实性', max:100},
           {name:'置信度', max:100},
           {name:'图文一致', max:100},
-          {name:'图片数', max:Math.max(dim.image_count || 1, 5)},
+          {name:'公章完整性', max:100},
+          {name:'频率自然性', max:100},
+          {name:'边界一致性', max:100},
         ],
         shape: 'polygon',
-        axisLine: {lineStyle:{color:'#2e3340'}},
-        splitLine: {lineStyle:{color:'#2e3340'}},
-        splitArea: {areaStyle:{color:['#1e2028','#272b35']}},
-        axisName: {color:'#8b90a0', fontSize:11},
+        axisLine: {lineStyle:{color:'#e2e8f0'}},
+        splitLine: {lineStyle:{color:'#e2e8f0'}},
+        splitArea: {areaStyle:{color:['#f8fafc','#f1f5f9']}},
+        axisName: {color:'#64748b', fontSize:11},
       },
       series: [{
         type: 'radar',
@@ -489,7 +613,9 @@ function renderUrlAnalysis(d) {
             dim.authenticity || 0,
             dim.confidence || 0,
             dim.consistency || 50,
-            dim.image_count || 0,
+            dim.seal || 50,
+            dim.frequency || 50,
+            dim.edge || 50,
           ],
           lineStyle: {color:'#60a5fa'},
           areaStyle: {color:'rgba(96,165,250,0.2)'},
@@ -515,8 +641,9 @@ function renderUrlAnalysis(d) {
 
   // Report dimensions summary
   const dimSummary = $('reportDimensions');
+  const verdictText = dim.verdict || (score>=70?'该新闻页面图片以真实内容为主，图文一致性较好，可信度较高。':score>=40?'该新闻页面存在部分可疑图片，建议进一步核实。':'该新闻页面多张图片被判定为AI生成，建议谨慎引用，必要时核实图片来源。');
   dimSummary.innerHTML = `
-    <div class="report-dim-grid">
+    <div class="report-dim-grid report-dim-grid--7">
       <div class="report-dim-item">
         <span class="report-dim-label">综合评分</span>
         <span class="report-dim-value" style="color:${score>=70?'#22c55e':score>=40?'#f59e0b':'#ef4444'}">${Math.round(score)}</span>
@@ -533,9 +660,21 @@ function renderUrlAnalysis(d) {
         <span class="report-dim-label">图文一致性</span>
         <span class="report-dim-value">${Math.round(dim.consistency||50)}%</span>
       </div>
+      <div class="report-dim-item">
+        <span class="report-dim-label">公章完整性</span>
+        <span class="report-dim-value">${Math.round(dim.seal||50)}%</span>
+      </div>
+      <div class="report-dim-item">
+        <span class="report-dim-label">频率自然性</span>
+        <span class="report-dim-value">${Math.round(dim.frequency||50)}%</span>
+      </div>
+      <div class="report-dim-item">
+        <span class="report-dim-label">边界一致性</span>
+        <span class="report-dim-value">${Math.round(dim.edge||50)}%</span>
+      </div>
     </div>
     <div class="report-conclusion">
-      <strong>检测结论：</strong>${score>=70?'该新闻页面图片以真实内容为主，图文一致性较好，可信度较高。':score>=40?'该新闻页面存在部分可疑图片，建议进一步核实。':'该新闻页面多张图片被判定为AI生成，建议谨慎引用，必要时核实图片来源。'}
+      <strong>检测结论：</strong>${verdictText}
     </div>
   `;
   reportSection.hidden = false;
@@ -555,6 +694,7 @@ btnUrl.addEventListener('click', async ()=>{
   reportSection.hidden=true;
   $('urlSummaryPanel').hidden=true;
   $('urlAnalysisLayout').hidden=true;
+  const _textWrapReset = $('urlTextDetectWrap'); if (_textWrapReset) _textWrapReset.hidden = true;
   const _qa = $('urlQuickActions'); if (_qa) _qa.hidden = true;
   // F2: Progressive status feedback with staged messages
   setStatus(urlStatus,'正在抓取页面内容…','');
@@ -585,6 +725,7 @@ $('btnUrlExportPdf').addEventListener('click', () => {
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>AIGI-Holmes 检测报告</title>
   <style>body{font-family:sans-serif;padding:20px;color:#333}
   .report-dim-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+  .report-dim-grid--7{grid-template-columns:repeat(4,1fr)}
   .report-dim-item{background:#f5f5f5;border-radius:8px;padding:12px;text-align:center}
   .report-dim-label{font-size:12px;color:#666;display:block}
   .report-dim-value{font-size:22px;font-weight:700;display:block;margin-top:4px}
@@ -608,10 +749,10 @@ $('btnUrlShare').addEventListener('click', () => {
   // Show share dialog with URL pre-filled
   openActionModal(`
     <div style="padding:20px;">
-      <h3 style="color:#e4e6ed;margin:0 0 8px;font-size:1rem;">分享检测链接</h3>
-      <p style="color:#8b90a0;font-size:0.85rem;margin:0 0 12px;">链接已自动复制到剪贴板，也可手动选择复制：</p>
+      <h3 style="color:#1e293b;margin:0 0 8px;font-size:1rem;">分享检测链接</h3>
+      <p style="color:#64748b;font-size:0.85rem;margin:0 0 12px;">链接已自动复制到剪贴板，也可手动选择复制：</p>
       <input type="text" value="${_escHtml(url)}" readonly
-        style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #2e3340;background:#272b35;color:#c0c4d0;font-size:0.85rem;box-sizing:border-box;"
+        style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;font-size:0.85rem;box-sizing:border-box;"
         onclick="this.select();" />
       <button class="btn-detect" id="btnActionConfirm" style="margin-top:14px;width:100%;">关闭</button>
     </div>
@@ -622,6 +763,9 @@ $('btnUrlShare').addEventListener('click', () => {
 $('btnUrlScrollTop').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
+
+// 文章文本检测按鈕
+$('btnDetectUrlText').addEventListener('click', detectUrlText);
 
 // Translation button for news summary
 document.addEventListener('click', (e) => {
@@ -693,15 +837,15 @@ function updateBatchAccess(){
   }else{hint.hidden=true;}
 }
 
-/* ── Batch detection — WebSocket + drag-drop (方案C 沉浸收缩式) ───── */
+/* ── Batch detection — WebSocket + drag-drop ───── */
 let _batchWs=null;
 let _batchRunning=false;
-let _batchIndexOffset=0;  // 累计索引偏移，多次批次骨架卡片 ID 不冲突
+let _batchIndexOffset=0;
 
 const _ACCEPTED_RE = /\.(jpe?g|png|webp|gif|bmp|pdf|docx?|html?|txt)$/i;
 
-// 批量统计七维分类
-const _BATCH_CATS=['\u4eba\u7269','\u52a8\u7269','\u5efa\u7b51','\u98ce\u666f','\u98df\u7269','\u4ea4\u901a','\u5176\u4ed6'];
+// 批量统计七维分类（每张结果出来立即更新雷达图）
+const _BATCH_CATS=['人物','动物','建筑','风景','食物','交通','其他'];
 function _makeCatMap(){const m={};_BATCH_CATS.forEach(c=>{m[c]={c:0,r:0,f:0};});return m;}
 let _batchStats={total:0,realCount:0,fakeCount:0,confSum:0,cats:_makeCatMap()};
 let _radarChart=null;
@@ -709,6 +853,74 @@ let _radarChart=null;
 function _resetBatchStats(){
   _batchStats.total=0;_batchStats.realCount=0;_batchStats.fakeCount=0;_batchStats.confSum=0;
   _BATCH_CATS.forEach(c=>{_batchStats.cats[c].c=0;_batchStats.cats[c].r=0;_batchStats.cats[c].f=0;});
+}
+
+// 每张结果到达时调用，立即更新所有统计数字和雷达图
+function _updateBatchStatsFromResult(r){
+  const cat=(_BATCH_CATS.indexOf(r.category)>=0)?r.category:'其他';
+  const realScore=(r.probs.find(p=>p.label==='REAL')||{score:0}).score;
+  const fakeScore=(r.probs.find(p=>p.label==='FAKE')||{score:0}).score;
+  _batchStats.total++;
+  if(r.label==='REAL') _batchStats.realCount++; else _batchStats.fakeCount++;
+  _batchStats.confSum+=r.confidence;
+  _batchStats.cats[cat].c++;
+  _batchStats.cats[cat].r+=realScore;
+  _batchStats.cats[cat].f+=fakeScore;
+  _refreshStatsPanel();
+}
+
+function _refreshStatsPanel(){
+  // 首次调用时展开两栏布局
+  const layout=$('batchResultLayout');
+  if(layout.hidden){
+    layout.hidden=false;
+    // 容器可见后初始化雷达图
+    if(!_radarChart&&typeof echarts!=='undefined'){
+      _radarChart=echarts.init($('statsRadar'),null,{renderer:'canvas'});
+      _radarChart.setOption({
+        backgroundColor:'transparent',
+        tooltip:{trigger:'item'},
+        legend:{bottom:0,textStyle:{color:'#64748b',fontSize:11},data:['真实照片','AI生成']},
+        radar:{
+          indicator:_BATCH_CATS.map(c=>({name:c,max:100})),
+          shape:'polygon',
+          axisLine:{lineStyle:{color:'#e2e8f0'}},
+          splitLine:{lineStyle:{color:'#e2e8f0'}},
+          splitArea:{areaStyle:{color:['#f8fafc','#f1f5f9']}},
+          axisName:{color:'#64748b',fontSize:11}
+        },
+        series:[{
+          type:'radar',
+          data:[
+            {name:'真实照片',value:[0,0,0,0,0,0,0],
+             lineStyle:{color:'#4ade80'},areaStyle:{color:'rgba(74,222,128,0.15)'},
+             itemStyle:{color:'#4ade80'}},
+            {name:'AI生成',value:[0,0,0,0,0,0,0],
+             lineStyle:{color:'#f87171'},areaStyle:{color:'rgba(248,113,113,0.15)'},
+             itemStyle:{color:'#f87171'}}
+          ]
+        }]
+      });
+    }
+  }
+  // 可信率
+  const avg=_batchStats.total?Math.round(_batchStats.confSum/_batchStats.total):0;
+  const valEl=$('statsCredibility');
+  valEl.textContent=avg;
+  valEl.style.color=avg>=70?'#4ade80':(avg>=40?'#f97316':'#f87171');
+  $('statsTotal').textContent=_batchStats.total;
+  $('statsReal').textContent=_batchStats.realCount;
+  $('statsFake').textContent=_batchStats.fakeCount;
+  // 雷达图实时刷新
+  if(_radarChart){
+    const realVals=_BATCH_CATS.map(c=>{const d=_batchStats.cats[c];return d.c?Math.round(d.r/d.c):0;});
+    const fakeVals=_BATCH_CATS.map(c=>{const d=_batchStats.cats[c];return d.c?Math.round(d.f/d.c):0;});
+    _radarChart.setOption({series:[{data:[{value:realVals},{value:fakeVals}]}]});
+  }
+  // 分类标签
+  const tags=_BATCH_CATS.filter(c=>_batchStats.cats[c].c>0)
+    .map(c=>`<span class="cat-tag">${c} ${_batchStats.cats[c].c}张</span>`).join('');
+  $('statsCats').innerHTML=tags;
 }
 
 // 文件夹选取：使用 File System Access API，避免浏览器显示“是否上传到此站点”对话框
@@ -737,73 +949,6 @@ async function _collectFilesFromDir(dirHandle,files){
       await _collectFilesFromDir(entry,files);
     }
   }
-}
-
-function _updateBatchStatsFromResult(r){
-  const cat=(_BATCH_CATS.indexOf(r.category)>=0)?r.category:'\u5176\u4ed6';
-  const realScore=(r.probs.find(p=>p.label==='REAL')||{score:0}).score;
-  const fakeScore=(r.probs.find(p=>p.label==='FAKE')||{score:0}).score;
-  _batchStats.total++;
-  if(r.label==='REAL') _batchStats.realCount++; else _batchStats.fakeCount++;
-  _batchStats.confSum+=r.confidence;
-  _batchStats.cats[cat].c++;
-  _batchStats.cats[cat].r+=realScore;
-  _batchStats.cats[cat].f+=fakeScore;
-  _updateStatsPanel();
-}
-
-function _updateStatsPanel(){
-  // 首次调用时显示两栏布局
-  const layout=$('batchResultLayout');
-  if(layout.hidden){
-    layout.hidden=false;
-    // 容器可见后初始化雷达图
-    if(!_radarChart&&typeof echarts!=='undefined'){
-      _radarChart=echarts.init($('statsRadar'),null,{renderer:'canvas'});
-      _radarChart.setOption({
-        backgroundColor:'transparent',
-        tooltip:{trigger:'item'},
-        legend:{bottom:0,textStyle:{color:'#8b90a0',fontSize:11},data:['真实照片','AI生成']},
-        radar:{
-          indicator:_BATCH_CATS.map(c=>({name:c,max:100})),
-          shape:'polygon',
-          axisLine:{lineStyle:{color:'#2e3340'}},
-          splitLine:{lineStyle:{color:'#2e3340'}},
-          splitArea:{areaStyle:{color:['#1e2028','#272b35']}},
-          axisName:{color:'#8b90a0',fontSize:11}
-        },
-        series:[{
-          type:'radar',
-          data:[
-            {name:'真实照片',value:[0,0,0,0,0,0,0],
-             lineStyle:{color:'#4ade80'},areaStyle:{color:'rgba(74,222,128,0.15)'},
-             itemStyle:{color:'#4ade80'}},
-            {name:'AI生成',value:[0,0,0,0,0,0,0],
-             lineStyle:{color:'#f87171'},areaStyle:{color:'rgba(248,113,113,0.15)'},
-             itemStyle:{color:'#f87171'}}
-          ]
-        }]
-      });
-    }
-  }
-  // 可信率数字和颜色
-  const avg=_batchStats.total?Math.round(_batchStats.confSum/_batchStats.total):0;
-  const valEl=$('statsCredibility');
-  valEl.textContent=avg;
-  valEl.style.color=avg>=70?'#4ade80':(avg>=40?'#f97316':'#f87171');
-  $('statsTotal').textContent=_batchStats.total;
-  $('statsReal').textContent=_batchStats.realCount;
-  $('statsFake').textContent=_batchStats.fakeCount;
-  // 雷达图数据更新
-  if(_radarChart){
-    const realVals=_BATCH_CATS.map(c=>{const d=_batchStats.cats[c];return d.c?Math.round(d.r/d.c):0;});
-    const fakeVals=_BATCH_CATS.map(c=>{const d=_batchStats.cats[c];return d.c?Math.round(d.f/d.c):0;});
-    _radarChart.setOption({series:[{data:[{value:realVals},{value:fakeVals}]}]});
-  }
-  // 分类标签
-  const tags=_BATCH_CATS.filter(c=>_batchStats.cats[c].c>0)
-    .map(c=>`<span class="cat-tag">${c} ${_batchStats.cats[c].c}张</span>`).join('');
-  $('statsCats').innerHTML=tags;
 }
 
 function initBatchZone(){
@@ -858,9 +1003,6 @@ async function handleBatchFiles(fileList){
   const files=allFiles.slice(0,50);
   if(!files.length){_batchRunning=false;return;}
 
-  // 记录本批起始索引偏移（不清空 gallery，实现堆叠）
-  const indexOffset=_batchIndexOffset;
-
   // Switch to bar mode
   $('batchLanding').hidden=true;
   $('batchBar').hidden=false;
@@ -894,7 +1036,7 @@ async function handleBatchFiles(fileList){
 
   let totalImages=0;
   let doneImages=0;
-  const sourceGroups={};  // source filename -> details element
+  const sourceGroups={};
 
   ws.onmessage=function(e){
     const d=JSON.parse(e.data);
@@ -904,13 +1046,17 @@ async function handleBatchFiles(fileList){
       totalImages=d.total;
       $('detectLabel').textContent=`检测进度 0/${totalImages}`;
 
-    }else if(d.type==='item'){
-      // Insert skeleton card（使用全局偏移确保 ID 唯一）
-      const skeletonId='skel-'+(d.index+indexOffset);
-      const card=`<div class="gallery-card skeleton-card" id="${skeletonId}"><div class="skeleton-block skeleton-img"></div><div class="gallery-card__body"><div class="skeleton-block skeleton-line"></div><div class="skeleton-block skeleton-line short"></div></div></div>`;
+    }else if(d.type==='result'){
+      // 检测完一张立即渲染卡片，无需骨架占位
+      doneImages++;
+      $('detectLabel').textContent=`检测进度 ${doneImages}/${totalImages}`;
+      const pct=totalImages?Math.round(doneImages/totalImages*100):0;
+      $('detectProgressBar').style.width=pct+'%';
+
+      const r=d.result;
+      const cardHtml=buildGalleryCard({...r, index:d.index+_batchIndexOffset+1, url:d.filename});
 
       if(d.source){
-        // Grouped under a source file
         let group=sourceGroups[d.source];
         if(!group){
           group=document.createElement('details');
@@ -925,40 +1071,30 @@ async function handleBatchFiles(fileList){
           g.appendChild(group);
           sourceGroups[d.source]=group;
         }
-        group.querySelector('.batch-source-gallery').insertAdjacentHTML('beforeend',card);
+        group.querySelector('.batch-source-gallery').insertAdjacentHTML('beforeend',cardHtml);
       }else{
-        g.insertAdjacentHTML('beforeend',card);
+        g.insertAdjacentHTML('beforeend',cardHtml);
       }
 
-    }else if(d.type==='result'){
-      doneImages++;
-      $('detectLabel').textContent=`检测进度 ${doneImages}/${totalImages}`;
-      const pct=totalImages?Math.round(doneImages/totalImages*100):0;
-      $('detectProgressBar').style.width=pct+'%';
-
-      const r=d.result;
-      const cardHtml=buildGalleryCard({...r, index:d.index+indexOffset+1, url:d.filename});
-      const skel=document.getElementById('skel-'+(d.index+indexOffset));
-      if(skel){
-        skel.outerHTML=cardHtml;
-      }
-      // Animate mini-fill bars
+      // 触发进度条动画
       requestAnimationFrame(()=>{requestAnimationFrame(()=>{
-        g.querySelectorAll('.mini-fill').forEach(x=>{
-          if(!x.style.width||x.style.width==='0%') x.style.width=x.dataset.score+'%';
-        });
+        const cards=g.querySelectorAll('.gallery-card:not(.skip-card)');
+        if(cards.length){
+          cards[cards.length-1].querySelectorAll('.mini-fill').forEach(x=>{
+            x.style.width=x.dataset.score+'%';
+          });
+        }
       });});
 
-      // 实时更新右侧统计面板
       _updateBatchStatsFromResult(r);
 
     }else if(d.type==='item_skip'){
-      const skipCard=`<div class="gallery-card skip-card"><div class="gallery-card__body"><span class="gallery-card__badge" style="background:#2e3340;color:#8b90a0">跳过</span><p class="gallery-card__conf">${d.filename||''}</p><p style="font-size:0.82rem;color:#8b90a0;margin:4px 0 0">${d.reason||''}</p></div></div>`;
+      const skipCard=`<div class="gallery-card skip-card"><div class="gallery-card__body"><span class="gallery-card__badge" style="background:#e2e8f0;color:#64748b">跳过</span><p class="gallery-card__conf">${d.filename||''}</p><p style="font-size:0.82rem;color:#94a3b8;margin:4px 0 0">${d.reason||''}</p></div></div>`;
       g.insertAdjacentHTML('beforeend',skipCard);
 
     }else if(d.type==='complete'){
       $('detectProgressBar').classList.add('complete');
-      _batchIndexOffset+=totalImages;  // 累加，供下一批使用
+      _batchIndexOffset+=doneImages;
       setStatus($('batchStatus'),`本批检测完成 ${d.count} 张，累计 ${_batchIndexOffset} 张`,'success');
       _batchRunning=false;
       _batchWs=null;
@@ -1010,9 +1146,8 @@ async function handleBatchFiles(fileList){
 
 function resetBatchZone(){
   _batchRunning=false;
-  _batchIndexOffset=0;  // 点×彻底重置时才清零
+  _batchIndexOffset=0;
   if(_batchWs){try{_batchWs.close();}catch(e){}_batchWs=null;}
-  // 重置统计面板
   _resetBatchStats();
   $('batchResultLayout').hidden=true;
   $('statsCredibility').textContent='--';
@@ -1028,7 +1163,6 @@ function resetBatchZone(){
   $('batchBar').hidden=true;
   $('batchGallery').innerHTML='';
   setStatus($('batchStatus'),'','');
-  // Reset file inputs
   $('batchInput').value='';
   $('folderInput').value='';
 }
@@ -1063,7 +1197,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if (!lastDetectionId) {
       openActionModal(`<div style="text-align:center;padding:24px">
         <div style="font-size:1rem;font-weight:600;color:#f59e0b;margin-bottom:12px">提示</div>
-        <p style="color:#c0c4d0;margin:0 0 16px">无检测记录，请先对图片进行检测</p>
+        <p style="color:#64748b;margin:0 0 16px">无检测记录，请先对图片进行检测</p>
         <button class="btn-detect" id="btnActionConfirm" style="width:100%">确定</button>
       </div>`);
       $('btnActionConfirm').addEventListener('click', closeActionModal);
@@ -1073,21 +1207,21 @@ document.addEventListener('DOMContentLoaded',()=>{
     const detectedColor = lastDetectionLabel === 'FAKE' ? '#f87171' : '#4ade80';
     openActionModal(`
       <div style="padding:20px">
-        <h3 style="color:#e4e6ed;margin:0 0 12px;font-size:1rem">标记误判</h3>
-        <p style="color:#8b90a0;font-size:0.85rem;margin:0 0 16px">AI 判定为
+        <h3 style="color:#1e293b;margin:0 0 12px;font-size:1rem">标记误判</h3>
+        <p style="color:#64748b;font-size:0.85rem;margin:0 0 16px">AI 判定为
           <strong style="color:${detectedColor}">${detectedZh}</strong>，您认为实际应该是：</p>
         <div style="display:flex;gap:10px;margin-bottom:14px">
-          <label style="flex:1;border:2px solid ${lastDetectionLabel==='REAL'?'#f87171':'#2e3340'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#1e2028" id="lblFeedFake">
+          <label style="flex:1;border:2px solid ${lastDetectionLabel==='REAL'?'#f87171':'#e2e8f0'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#f8fafc" id="lblFeedFake">
             <input type="radio" name="feedLabel" value="FAKE" style="margin-right:6px"${lastDetectionLabel==='REAL'?' checked':''}>
             <span style="color:#f87171;font-weight:600">AI生成</span>
           </label>
-          <label style="flex:1;border:2px solid ${lastDetectionLabel==='FAKE'?'#4ade80':'#2e3340'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#1e2028" id="lblFeedReal">
+          <label style="flex:1;border:2px solid ${lastDetectionLabel==='FAKE'?'#4ade80':'#e2e8f0'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#f8fafc" id="lblFeedReal">
             <input type="radio" name="feedLabel" value="REAL" style="margin-right:6px"${lastDetectionLabel==='FAKE'?' checked':''}>
-            <span style="color:#4ade80;font-weight:600">真实照片</span>
+            <span style="color:#22c55e;font-weight:600">真实照片</span>
           </label>
         </div>
         <textarea id="feedNote" placeholder="备注（可选）：如来源说明、判断依据…"
-          style="width:100%;height:68px;padding:8px;border-radius:6px;border:1px solid #2e3340;background:#272b35;color:#c0c4d0;font-size:0.82rem;resize:none;box-sizing:border-box"
+          style="width:100%;height:68px;padding:8px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;font-size:0.82rem;resize:none;box-sizing:border-box"
           maxlength="200"></textarea>
         <div style="display:flex;gap:10px;margin-top:12px">
           <button class="btn-secondary" id="btnFeedCancel" style="flex:1">取消</button>
@@ -1116,8 +1250,8 @@ document.addEventListener('DOMContentLoaded',()=>{
         actionModalContent.innerHTML = `
           <div style="text-align:center;padding:28px">
             <div style="font-size:1rem;font-weight:600;color:#22c55e;margin-bottom:14px">提交成功</div>
-            <h3 style="color:#e4e6ed;margin:0 0 8px">感谢反馈</h3>
-            <p style="color:#8b90a0;margin:0">您的反馈将帮助改进检测准确率</p>
+            <h3 style="color:#1e293b;margin:0 0 8px">感谢反馈</h3>
+            <p style="color:#64748b;margin:0">您的反馈将帮助改进检测准确率</p>
             <button class="btn-detect" id="btnActionConfirm" style="margin-top:20px;width:100%">确定</button>
           </div>`;
         $('btnActionConfirm').addEventListener('click', closeActionModal);
@@ -1133,8 +1267,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('btnRedetect').addEventListener('click',()=>{
     openActionModal(`
       <div style="text-align:center; padding:20px;">
-        <h3 style="color:#fff; margin:0 0 8px 0;">确认重新检测</h3>
-        <p style="color:#aaa; margin:0 0 24px 0;">是否要重新检测当前图片？</p>
+        <h3 style="color:#1e293b; margin:0 0 8px 0;">确认重新检测</h3>
+        <p style="color:#64748b; margin:0 0 24px 0;">是否要重新检测当前图片？</p>
         <div style="display:flex; gap:12px; justify-content:center;">
           <button class="btn-secondary" id="btnActionCancel" style="flex:1;">取消</button>
           <button class="btn-detect" id="btnActionConfirm" style="flex:1;">确认</button>
@@ -1154,9 +1288,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     const shareUrl = window.location.href;
     openActionModal(`
       <div style="text-align:center; padding:20px;">
-        <h3 style="color:#fff; margin:0 0 8px 0;">分享链接</h3>
-        <p style="color:#aaa; margin:0 0 16px 0;">复制以下链接分享给同事：</p>
-        <input type="text" value="${shareUrl}" readonly style="width:100%; padding:10px; border-radius:6px; border:1px solid #444; background:#2a2a2a; color:#fff; text-align:center; margin-bottom:16px;" onclick="this.select();" />
+        <h3 style="color:#1e293b; margin:0 0 8px 0;">分享链接</h3>
+        <p style="color:#64748b; margin:0 0 16px 0;">复制以下链接分享给同事：</p>
+        <input type="text" value="${shareUrl}" readonly style="width:100%; padding:10px; border-radius:6px; border:1px solid #e2e8f0; background:#f1f5f9; color:#1e293b; text-align:center; margin-bottom:16px;" onclick="this.select();" />
         <button class="btn-detect" id="btnActionConfirm" style="margin-top:8px;">确定</button>
       </div>
     `);
@@ -1191,46 +1325,58 @@ function _renderPagination(container, currentPage, total, pageSize, fnName) {
 }
 
 function openAdminPanel() {
-  // Permission guard: only admin may access the panel
   const rawUser = localStorage.getItem(AUTH_USER_KEY);
   if (!rawUser) { $('loginModal').hidden = false; return; }
   const u = JSON.parse(rawUser);
-  if (u.role !== 'admin') { alert('\u6743\u9650\u4e0d\u8db3\uff1a\u4ec5\u7ba1\u7406\u5458\u53ef\u8bbf\u95ee\u7ba1\u7406\u540e\u53f0'); return; }
-
-  const modal = $('adminPanelModal');
-  if (!modal) return;
-  modal.hidden = false;
-
-  document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
-  const firstTab = document.querySelector('.admin-tab-btn[data-admin-tab="dashboard"]');
-  if (firstTab) firstTab.classList.add('active');
-  document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
-  const dashPane = $('admin-dashboard');
-  if (dashPane) dashPane.classList.add('active');
-  loadAdminDashboard();
+  if (u.role !== 'admin') { alert('权限不足：仅管理员可访问管理后台'); return; }
+  switchToTab('history');
+  switchHistoryTab('admin-panel');
 }
 
-function closeAdminPanel() {
-  $('adminPanelModal').hidden = true;
+// History sub-tab switching
+function switchHistoryTab(tabName) {
+  document.querySelectorAll('.history-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#tab-history > .history-pane').forEach(p => p.classList.remove('active'));
+  const btn = document.querySelector(`.history-tab-btn[data-history-tab="${tabName}"]`);
+  if (btn) btn.classList.add('active');
+  const pane = $('history-' + tabName);
+  if (pane) pane.classList.add('active');
+  if (tabName === 'my-records') loadMyRecords(1);
+  if (tabName === 'admin-panel') {
+    // Load the currently active admin sub-tab
+    const activeSubBtn = document.querySelector('.admin-sub-tab-btn.active');
+    const subTab = activeSubBtn ? activeSubBtn.dataset.adminTab : 'dashboard';
+    _loadAdminSubTab(subTab);
+  }
 }
 
-$('btnAdminPanelClose').addEventListener('click', closeAdminPanel);
-$('adminPanelModal').addEventListener('click', e => {
-  if (e.target === $('adminPanelModal')) closeAdminPanel();
+// Admin sub-tab switching (within admin panel)
+function switchAdminSubTab(tabName) {
+  document.querySelectorAll('.admin-sub-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.admin-sub-pane').forEach(p => p.classList.remove('active'));
+  const btn = document.querySelector(`.admin-sub-tab-btn[data-admin-tab="${tabName}"]`);
+  if (btn) btn.classList.add('active');
+  const pane = $('admin-sub-' + tabName);
+  if (pane) pane.classList.add('active');
+  _loadAdminSubTab(tabName);
+}
+
+function _loadAdminSubTab(tabName) {
+  if (tabName === 'dashboard') loadAdminDashboard();
+  else if (tabName === 'users') loadAdminUsers(1);
+  else if (tabName === 'detections') loadAdminDetections(1);
+  else if (tabName === 'feedback') loadAdminFeedback(1);
+}
+
+document.querySelectorAll('.history-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    switchHistoryTab(btn.dataset.historyTab);
+  });
 });
 
-// Admin tab switching
-document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+document.querySelectorAll('.admin-sub-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    const tab = btn.dataset.adminTab;
-    document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
-    $('admin-' + tab).classList.add('active');
-    if (tab === 'dashboard') loadAdminDashboard();
-    if (tab === 'users') loadAdminUsers(1);
-    if (tab === 'detections') loadAdminDetections(1);
-    if (tab === 'feedback') loadAdminFeedback(1);
+    switchAdminSubTab(btn.dataset.adminTab);
   });
 });
 
@@ -1272,10 +1418,10 @@ async function loadAdminDashboard() {
           }]
         },
         options: {
-          plugins: { legend: { labels: { color: '#8b90a0' } } },
+          plugins: { legend: { labels: { color: '#64748b' } } },
           scales: {
-            x: { ticks: { color: '#8b90a0' }, grid: { color: '#2e3340' } },
-            y: { ticks: { color: '#8b90a0' }, grid: { color: '#2e3340' } }
+            x: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
+            y: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } }
           }
         }
       });
@@ -1294,10 +1440,10 @@ async function loadAdminDashboard() {
           }]
         },
         options: {
-          plugins: { legend: { labels: { color: '#8b90a0' } } },
+          plugins: { legend: { labels: { color: '#64748b' } } },
           scales: {
-            x: { ticks: { color: '#8b90a0', maxRotation: 0, autoSkip: true }, grid: { color: '#2e3340' } },
-            y: { ticks: { color: '#8b90a0' }, grid: { color: '#2e3340' } }
+            x: { ticks: { color: '#64748b', maxRotation: 0, autoSkip: true }, grid: { color: '#e2e8f0' } },
+            y: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } }
           }
         }
       });
@@ -1305,7 +1451,6 @@ async function loadAdminDashboard() {
   } catch (e) {
     if (e.message && (e.message.includes('401') || e.message.includes('403'))) {
       clearAuth();
-      closeAdminPanel();
       $('loginModal').hidden = false;
       return;
     }
@@ -1339,7 +1484,7 @@ async function loadAdminUsers(page) {
     const wrap = $('adminUsersTable');
     if (!wrap) return;
     if (!data.users || data.users.length === 0) {
-      wrap.innerHTML = '<p style="color:#8b90a0;padding:20px;text-align:center">\u6682\u65e0\u6570\u636e</p>';
+      wrap.innerHTML = '<p style="color:#94a3b8;padding:20px;text-align:center">\u6682\u65e0\u6570\u636e</p>';
     } else {
       wrap.innerHTML = `
         <table class="admin-table">
@@ -1354,7 +1499,7 @@ async function loadAdminUsers(page) {
     }
     _renderPagination($('adminUsersPagination'), page, data.total, 10, 'loadAdminUsers');
   } catch (e) {
-    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); closeAdminPanel(); return; }
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); return; }
     const w = $('adminUsersTable');
     if (w) w.innerHTML = '<p style="color:#f87171;padding:16px">\u26a0\ufe0f \u52a0\u8f7d\u5931\u8d25</p>';
   }
@@ -1379,11 +1524,11 @@ async function loadAdminDetections(page) {
     const wrap = $('adminDetectionsTable');
     if (!wrap) return;
     if (!data.detections || data.detections.length === 0) {
-      wrap.innerHTML = '<p style="color:#8b90a0;padding:20px;text-align:center">\u6682\u65e0\u6570\u636e</p>';
+      wrap.innerHTML = '<p style="color:#94a3b8;padding:20px;text-align:center">\u6682\u65e0\u6570\u636e</p>';
     } else {
       wrap.innerHTML = `
         <table class="admin-table">
-          <thead><tr><th>ID</th><th>\u7528\u6237</th><th>\u6765\u6e90</th><th>\u7ed3\u679c</th><th>\u7f6e\u4fe1\u5ea6</th><th>\u65f6\u95f4</th><th>\u7edf\u8ba1</th></tr></thead>
+          <thead><tr><th>ID</th><th>\u7528\u6237</th><th>\u6765\u6e90</th><th>\u7ed3\u679c</th><th>\u7f6e\u4fe1\u5ea6</th><th>\u65f6\u95f4</th><th>\u64cd\u4f5c</th></tr></thead>
           <tbody>${data.detections.map(d => `<tr>
             <td>${d.id}</td>
             <td>${_escHtml(String(d.user_id ?? '\u533f\u540d'))}</td>
@@ -1393,13 +1538,16 @@ async function loadAdminDetections(page) {
             <td><span class="admin-badge ${d.label==='FAKE'?'admin-badge--fake':'admin-badge--real'}">${d.label==='FAKE'?'AI\u751f\u6210':'\u771f\u5b9e'}</span></td>
             <td>${Math.round(d.confidence)}%</td>
             <td>${new Date(d.created_at).toLocaleString()}</td>
-            <td><button class="admin-stats-btn" onclick="openImageStats(${d.id})" title="\u67e5\u770b\u56fe\u7247\u7edf\u8ba1">\ud83d\udcca</button></td>
+            <td>
+              <button class="admin-stats-btn" onclick="openImageStats(${d.id})" title="\u67e5\u770b\u56fe\u7247\u7edf\u8ba1">\ud83d\udcca</button>
+              <button class="admin-stats-btn" onclick="openFeedbackFromHistory(${d.id},'${d.label}')" title="\u6807\u8bb0\u8bef\u5224">\u26a0\ufe0f</button>
+            </td>
           </tr>`).join('')}</tbody>
         </table>`;
     }
     _renderPagination($('adminDetectionsPagination'), page, data.total, 10, 'loadAdminDetections');
   } catch (e) {
-    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); closeAdminPanel(); return; }
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); return; }
     const w = $('adminDetectionsTable');
     if (w) w.innerHTML = '<p style="color:#f87171;padding:16px">\u26a0\ufe0f \u52a0\u8f7d\u5931\u8d25</p>';
   }
@@ -1407,7 +1555,7 @@ async function loadAdminDetections(page) {
 
 /* ── Image-level statistics modal ─────────────────────────────────── */
 async function openImageStats(detectionId) {
-  openActionModal(`<div style="text-align:center;padding:28px"><div style="color:#60a5fa;font-size:1.5rem">\u23f3 \u52a0\u8f7d\u4e2d\u2026</div></div>`);
+  openActionModal(`<div style="text-align:center;padding:28px"><div style="color:#3b82f6;font-size:1.5rem">\u23f3 加载中…</div></div>`);
   try {
     const res = await fetch(`/api/admin/image-stats/${detectionId}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1417,51 +1565,51 @@ async function openImageStats(detectionId) {
     const rateColor = d.fake_rate >= 70 ? fakeColor : d.fake_rate >= 40 ? '#f97316' : realColor;
     actionModalContent.innerHTML = `
       <div style="padding:20px">
-        <h3 style="color:#e4e6ed;margin:0 0 14px;font-size:1rem">\ud83d\udcca \u56fe\u7247\u68c0\u6d4b\u7edf\u8ba1</h3>
-        ${d.image_url ? `<p style="color:#6b7280;font-size:0.78rem;margin:0 0 14px;word-break:break-all">${_escHtml(d.image_url.slice(0,90))}${d.image_url.length>90?'\u2026':''}</p>` : ''}
+        <h3 style="color:#1e293b;margin:0 0 14px;font-size:1rem">图片检测统计</h3>
+        ${d.image_url ? `<p style="color:#64748b;font-size:0.78rem;margin:0 0 14px;word-break:break-all">${_escHtml(d.image_url.slice(0,90))}${d.image_url.length>90?'…':''}</p>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-          <div style="background:#272b35;border-radius:8px;padding:12px;text-align:center">
-            <div style="font-size:1.5rem;font-weight:700;color:#e4e6ed">${d.total_detections}</div>
-            <div style="font-size:0.72rem;color:#6b7280;margin-top:3px">\u68c0\u6d4b\u6b21\u6570</div>
+          <div style="background:#f1f5f9;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:#1e293b">${d.total_detections}</div>
+            <div style="font-size:0.72rem;color:#64748b;margin-top:3px">检测次数</div>
           </div>
-          <div style="background:#272b35;border-radius:8px;padding:12px;text-align:center">
+          <div style="background:#f1f5f9;border-radius:8px;padding:12px;text-align:center">
             <div style="font-size:1.5rem;font-weight:700;color:${fakeColor}">${d.fake_count}</div>
-            <div style="font-size:0.72rem;color:#6b7280;margin-top:3px">AI\u751f\u6210</div>
+            <div style="font-size:0.72rem;color:#64748b;margin-top:3px">AI生成</div>
           </div>
-          <div style="background:#272b35;border-radius:8px;padding:12px;text-align:center">
+          <div style="background:#f1f5f9;border-radius:8px;padding:12px;text-align:center">
             <div style="font-size:1.5rem;font-weight:700;color:${realColor}">${d.real_count}</div>
-            <div style="font-size:0.72rem;color:#6b7280;margin-top:3px">\u771f\u5b9e</div>
+            <div style="font-size:0.72rem;color:#64748b;margin-top:3px">真实</div>
           </div>
         </div>
-        <div style="background:#272b35;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+        <div style="background:#f1f5f9;border-radius:8px;padding:12px 14px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
-            <span style="color:#8b90a0;font-size:0.85rem">AI\u751f\u6210\u7387</span>
+            <span style="color:#64748b;font-size:0.85rem">AI生成率</span>
             <span style="font-size:1.1rem;font-weight:700;color:${rateColor}">${d.fake_rate}%</span>
           </div>
-          <div style="background:#1e2028;border-radius:4px;height:7px;overflow:hidden">
+          <div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden">
             <div style="width:${d.fake_rate}%;height:100%;background:${rateColor};border-radius:4px"></div>
           </div>
         </div>
-        <div style="background:#272b35;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
-          <span style="color:#8b90a0;font-size:0.85rem">\u7528\u6237\u8bef\u5224\u53cd\u9988</span>
-          <span style="color:#e4e6ed;font-weight:600">${d.feedback_count} \u6b21</span>
+        <div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#64748b;font-size:0.85rem">用户误判反馈</span>
+          <span style="color:#1e293b;font-weight:600">${d.feedback_count} 次</span>
         </div>
         ${d.recent_feedbacks && d.recent_feedbacks.length > 0 ? `
         <div style="margin-bottom:14px">
-          <p style="color:#6b7280;font-size:0.78rem;margin:0 0 6px">\u6700\u8fd1\u53cd\u9988\uff1a</p>
+          <p style="color:#64748b;font-size:0.78rem;margin:0 0 6px">最近反馈：</p>
           ${d.recent_feedbacks.map(fb => `
-            <div style="background:#1e2028;border-radius:6px;padding:7px 10px;margin-bottom:4px;font-size:0.8rem;display:flex;justify-content:space-between;align-items:center">
-              <span style="color:#8b90a0">${fb.reported_label}\u2192<span style="color:${fb.correct_label==='FAKE'?fakeColor:realColor}">${fb.correct_label}</span>${fb.note?` &middot; <span style="color:#c0c4d0">${_escHtml((fb.note||'').slice(0,28))}</span>`:''}</span>
-              <span style="color:#4b5563;font-size:0.72rem">${new Date(fb.created_at).toLocaleDateString()}</span>
+            <div style="background:#f8fafc;border-radius:6px;padding:7px 10px;margin-bottom:4px;font-size:0.8rem;display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#64748b">${fb.reported_label}→<span style="color:${fb.correct_label==='FAKE'?fakeColor:realColor}">${fb.correct_label}</span>${fb.note?` &middot; <span style="color:#1e293b">${_escHtml((fb.note||'').slice(0,28))}</span>`:''}</span>
+              <span style="color:#94a3b8;font-size:0.72rem">${new Date(fb.created_at).toLocaleDateString()}</span>
             </div>`).join('')}
         </div>` : ''}
-        <button class="btn-detect" id="btnActionConfirm" style="width:100%">\u5173\u95ed</button>
+        <button class="btn-detect" id="btnActionConfirm" style="width:100%">关闭</button>
       </div>`;
     $('btnActionConfirm').addEventListener('click', closeActionModal);
   } catch(e) {
     actionModalContent.innerHTML = `<div style="padding:24px;text-align:center">
-      <p style="color:#f87171">\u26a0\ufe0f \u52a0\u8f7d\u7edf\u8ba1\u5931\u8d25</p>
-      <button class="btn-detect" id="btnActionConfirm" style="margin-top:14px">\u5173\u95ed</button>
+      <p style="color:#ef4444">加载统计失败</p>
+      <button class="btn-detect" id="btnActionConfirm" style="margin-top:14px">关闭</button>
     </div>`;
     $('btnActionConfirm').addEventListener('click', closeActionModal);
   }
@@ -1481,7 +1629,7 @@ async function loadAdminFeedback(page) {
     const wrap = $('adminFeedbackTable');
     if (!wrap) return;
     if (!data.feedbacks || data.feedbacks.length === 0) {
-      wrap.innerHTML = '<p style="color:#8b90a0;padding:24px;text-align:center">\u6682\u65e0\u53cd\u9988\u6570\u636e</p>';
+      wrap.innerHTML = '<p style="color:#94a3b8;padding:24px;text-align:center">\u6682\u65e0\u53cd\u9988\u6570\u636e</p>';
     } else {
       wrap.innerHTML = `
         <table class="admin-table">
@@ -1501,7 +1649,7 @@ async function loadAdminFeedback(page) {
     }
     _renderPagination($('adminFeedbackPagination'), page, data.total, 10, 'loadAdminFeedback');
   } catch (e) {
-    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); closeAdminPanel(); return; }
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); return; }
     const w = $('adminFeedbackTable');
     if (w) w.innerHTML = '<p style="color:#f87171;padding:16px">\u26a0\ufe0f \u52a0\u8f7d\u5931\u8d25</p>';
   }
@@ -1513,7 +1661,7 @@ if (_btnIntegrate) {
   _btnIntegrate.addEventListener('click', async () => {
     const statusEl = $('integrateStatus');
     _btnIntegrate.disabled = true;
-    _btnIntegrate.textContent = '\u96c6\u6210\u4e2d\u2026';
+    _btnIntegrate.innerHTML = '集成中…';
     statusEl.textContent = '';
     try {
       const res = await fetch('/api/admin/feedback/integrate', { method: 'POST', headers: authHeaders() });
@@ -1524,7 +1672,69 @@ if (_btnIntegrate) {
       statusEl.textContent = '\u274c \u7f51\u7edc\u9519\u8bef';
     } finally {
       _btnIntegrate.disabled = false;
-      _btnIntegrate.textContent = '\ud83d\udce6 \u96c6\u6210\u5230\u8bad\u7ec3\u96c6';
+      _btnIntegrate.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg> 集成到训练集';
+    }
+  });
+}
+
+// ── Feedback from history records ────────────────────────────────────────────
+function openFeedbackFromHistory(detectionId, currentLabel) {
+  const detectedZh = currentLabel === 'FAKE' ? 'AI生成' : '真实照片';
+  const detectedColor = currentLabel === 'FAKE' ? '#f87171' : '#4ade80';
+  openActionModal(`
+    <div style="padding:20px">
+      <h3 style="color:#1e293b;margin:0 0 12px;font-size:1rem">标记误判</h3>
+      <p style="color:#64748b;font-size:0.85rem;margin:0 0 16px">AI 判定为
+        <strong style="color:${detectedColor}">${detectedZh}</strong>，您认为实际应该是：</p>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <label style="flex:1;border:2px solid ${currentLabel==='REAL'?'#f87171':'#e2e8f0'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#f8fafc">
+          <input type="radio" name="feedLabelHist" value="FAKE" style="margin-right:6px"${currentLabel==='REAL'?' checked':''}>
+          <span style="color:#f87171;font-weight:600">AI生成</span>
+        </label>
+        <label style="flex:1;border:2px solid ${currentLabel==='FAKE'?'#4ade80':'#e2e8f0'};border-radius:8px;padding:10px;cursor:pointer;text-align:center;background:#f8fafc">
+          <input type="radio" name="feedLabelHist" value="REAL" style="margin-right:6px"${currentLabel==='FAKE'?' checked':''}>
+          <span style="color:#22c55e;font-weight:600">真实照片</span>
+        </label>
+      </div>
+      <textarea id="feedNoteHist" placeholder="备注（可选）：如来源说明、判断依据…"
+        style="width:100%;height:68px;padding:8px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;font-size:0.82rem;resize:none;box-sizing:border-box"
+        maxlength="200"></textarea>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn-secondary" id="btnFeedCancelHist" style="flex:1">取消</button>
+        <button class="btn-detect" id="btnFeedSubmitHist" style="flex:1">提交反馈</button>
+      </div>
+      <p id="feedErrorHist" style="color:#f87171;font-size:0.82rem;margin:8px 0 0;min-height:16px"></p>
+    </div>
+  `);
+  $('btnFeedCancelHist').addEventListener('click', closeActionModal);
+  $('btnFeedSubmitHist').addEventListener('click', async () => {
+    const btn = $('btnFeedSubmitHist');
+    const errEl = $('feedErrorHist');
+    const sel = document.querySelector('input[name="feedLabelHist"]:checked');
+    if (!sel) { errEl.textContent = '请选择正确标签'; return; }
+    const note = ($('feedNoteHist').value || '').trim();
+    btn.disabled = true;
+    btn.textContent = '提交中…';
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ detection_id: detectionId, correct_label: sel.value, note }),
+      });
+      const resp = await res.json();
+      if (!res.ok) { errEl.textContent = resp.detail || '提交失败'; btn.disabled = false; btn.textContent = '提交反馈'; return; }
+      actionModalContent.innerHTML = `
+        <div style="text-align:center;padding:28px">
+          <div style="font-size:1rem;font-weight:600;color:#22c55e;margin-bottom:14px">提交成功</div>
+          <h3 style="color:#1e293b;margin:0 0 8px">感谢反馈</h3>
+          <p style="color:#64748b;margin:0">您的反馈将帮助改进检测准确率</p>
+          <button class="btn-detect" id="btnActionConfirm" style="margin-top:20px;width:100%">确定</button>
+        </div>`;
+      $('btnActionConfirm').addEventListener('click', closeActionModal);
+    } catch(e) {
+      errEl.textContent = '网络错误';
+      btn.disabled = false;
+      btn.textContent = '提交反馈';
     }
   });
 }
@@ -1953,7 +2163,7 @@ function showImageUrl(imgUrl) {
     if (modal) {
       openActionModal(`
         <h3>图片原始 URL</h3>
-        <p style="word-break: break-all; font-size: 0.85rem; color: #8b90a0;">
+        <p style="word-break: break-all; font-size: 0.85rem; color: #64748b;">
           <code>${escapeHtml(imgUrl)}</code>
         </p>
         <button class="btn-secondary" onclick="navigator.clipboard.writeText('${imgUrl.replace(/'/g, "\\'")}').then(() => showToast('URL已复制')).catch(() => showToast('复制失败'))">复制URL</button>
@@ -2088,26 +2298,471 @@ if (btnUrl) {
   }, { once: false });
 }
 
-// Helper function to escape HTML
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 // Toast notification
+/* ============================================================
+   My Records (检测历史 — 当前用户)
+   ============================================================ */
+async function loadMyRecords(page) {
+  const searchEl = $('myRecordsSearch');
+  const labelEl  = $('myRecordsLabelFilter');
+  const search   = (searchEl && searchEl.value.trim()) || '';
+  const label    = (labelEl  && labelEl.value)         || '';
+  const params   = new URLSearchParams({ page, page_size: 10 });
+  if (search) params.set('search', search);
+  if (label)  params.set('label',  label);
+  try {
+    const res = await fetch(`/api/history?${params}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const totalEl = $('myRecordsTotal');
+    if (totalEl) totalEl.textContent = `共 ${data.total} 条`;
+
+    const wrap = $('myRecordsTable');
+    if (!wrap) return;
+    if (!data.records || data.records.length === 0) {
+      wrap.innerHTML = '<p style="color:#94a3b8;padding:24px;text-align:center">暂无检测记录</p>';
+    } else {
+      wrap.innerHTML = `
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>来源</th><th>结果</th><th>置信度</th><th>时间</th><th>操作</th></tr></thead>
+          <tbody>${data.records.map(d => `<tr>
+            <td>${d.id}</td>
+            <td title="${_escHtml(d.image_url||'')}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              ${d.image_url ? _escHtml(d.image_url.slice(0,40)) + '…' : '本地上传'}
+            </td>
+            <td><span class="admin-badge ${d.label==='FAKE'?'admin-badge--fake':'admin-badge--real'}">${d.label==='FAKE'?'AI生成':'真实'}</span></td>
+            <td>${Math.round(d.confidence)}%</td>
+            <td>${new Date(d.created_at).toLocaleString()}</td>
+            <td><button class="admin-stats-btn" onclick="openFeedbackFromHistory(${d.id},'${d.label}')" title="标记误判">⚠️</button></td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+    }
+    _renderPagination($('myRecordsPagination'), page, data.total, 10, 'loadMyRecords');
+  } catch (e) {
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); return; }
+    const w = $('myRecordsTable');
+    if (w) w.innerHTML = '<p style="color:#ef4444;padding:16px">加载失败</p>';
+  }
+}
+
+// Debounced search/filter for my records
+['myRecordsSearch', 'myRecordsLabelFilter'].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(() => loadMyRecords(1), 350); });
+});
+
+/* ============================================================
+   Floating Ball & FAQ
+   ============================================================ */
+let _faqData = [];
+let _faqPage = 0;
+const _FAQ_PER_PAGE = 5;
+
+async function loadFaqData() {
+  if (_faqData.length > 0) return;
+  try {
+    const res = await fetch('/static/faq/questions.json');
+    if (res.ok) _faqData = await res.json();
+  } catch (e) {
+    console.warn('Failed to load FAQ data:', e);
+  }
+}
+
+function renderFaqList() {
+  const list = $('faqList');
+  if (!list) return;
+  const start = (_faqPage * _FAQ_PER_PAGE) % Math.max(_faqData.length, 1);
+  const items = [];
+  for (let i = 0; i < _FAQ_PER_PAGE && i < _faqData.length; i++) {
+    items.push(_faqData[(start + i) % _faqData.length]);
+  }
+  list.innerHTML = items.map((item, idx) =>
+    `<button class="faq-item" data-faq-idx="${idx}">${_escHtml(item.q)}</button>`
+  ).join('');
+  // Show faq list, hide answer
+  $('faqList').hidden = false;
+  const ans = $('faqAnswer');
+  if (ans) ans.hidden = true;
+}
+
+// Floating ball toggle
+if ($('floatingBall')) {
+  $('floatingBall').addEventListener('click', async () => {
+    const panel = $('floatingPanel');
+    if (!panel) return;
+    if (!panel.hidden) {
+      panel.hidden = true;
+      return;
+    }
+    await loadFaqData();
+    renderFaqList();
+    panel.hidden = false;
+  });
+}
+
+if ($('floatingPanelClose')) {
+  $('floatingPanelClose').addEventListener('click', () => {
+    $('floatingPanel').hidden = true;
+  });
+}
+
+// FAQ item click
+if ($('floatingPanelBody')) {
+  $('floatingPanelBody').addEventListener('click', (e) => {
+    const item = e.target.closest('.faq-item');
+    if (!item) return;
+    const idx = parseInt(item.dataset.faqIdx);
+    const start = (_faqPage * _FAQ_PER_PAGE) % Math.max(_faqData.length, 1);
+    const realIdx = (start + idx) % _faqData.length;
+    const faq = _faqData[realIdx];
+    if (!faq) return;
+    $('faqList').hidden = true;
+    const ans = $('faqAnswer');
+    ans.hidden = false;
+    $('faqAnswerContent').innerHTML = `<h4>${_escHtml(faq.q)}</h4><p>${_escHtml(faq.a)}</p>`;
+  });
+}
+
+if ($('faqBack')) {
+  $('faqBack').addEventListener('click', () => {
+    $('faqAnswer').hidden = true;
+    $('faqList').hidden = false;
+  });
+}
+
+if ($('faqRefresh')) {
+  $('faqRefresh').addEventListener('click', () => {
+    _faqPage++;
+    renderFaqList();
+  });
+}
+
+/* ============================================================
+   News detection enhancements — Web Search & News Image buttons
+   ============================================================ */
+
+/* ── 联网新闻搜索 ──────────────────────────────────────────── */
+(function initNewsSearch() {
+  let _newsOffset = 0;
+  const _newsCount = 10;
+
+  function _extractKeyword(url) {
+    // Prefer article title/summary extracted from the page itself
+    if (_urlPageTitle) return _urlPageTitle.trim().slice(0, 100);
+    if (_urlPageSummary) {
+      // Take the first 8-10 meaningful words of the summary
+      const words = _urlPageSummary.trim().split(/\s+/).slice(0, 10).join(' ');
+      if (words.length > 5) return words.slice(0, 100);
+    }
+    // Fallback: parse URL path
+    try {
+      const u = new URL(url);
+      const parts = u.pathname.replace(/\//g, ' ').replace(/[-_]/g, ' ').trim();
+      return (parts || u.hostname.replace('www.', '')).slice(0, 60);
+    } catch { return ''; }
+  }
+
+  function _formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const diff = Math.floor((Date.now() - d) / 1000);
+      if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+      if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+      if (diff < 604800) return Math.floor(diff / 86400) + ' 天前';
+      return d.toLocaleDateString('zh-CN');
+    } catch { return ''; }
+  }
+
+  function _escHtmlLocal(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderNewsResults(articles) {
+    const el = $('newsSearchResults');
+    if (!articles || articles.length === 0) {
+      el.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px">未找到相关新闻</p>';
+      return;
+    }
+    el.innerHTML = articles.map(a => {
+      // 兼容 Serper API 格式
+      const title = a.title || a.name || '';
+      const desc = a.snippet || a.description || '';
+      const url = a.link || a.url || '#';
+      const source = a.source || '';
+      const dateStr = _formatDate(a.date || a.datePublished);
+      const thumb = a.image || ''
+        ? `<img class="news-card-thumb" src="${_escHtmlLocal(a.image)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        : '';
+      return `
+        <a class="news-card" href="${_escHtmlLocal(url)}" target="_blank" rel="noopener">
+          ${thumb}
+          <div class="news-card-body">
+            <div class="news-card-title">${_escHtmlLocal(title)}</div>
+            <div class="news-card-desc">${_escHtmlLocal(desc)}</div>
+            <div class="news-card-meta">
+              ${source ? `<span class="news-card-source">${_escHtmlLocal(source)}</span>` : ''}
+              ${dateStr ? `<span>${dateStr}</span>` : ''}
+            </div>
+          </div>
+        </a>`;
+    }).join('');
+  }
+
+  async function doNewsSearch(offset) {
+    const keyword = ($('newsSearchKeyword').value || '').trim();
+    if (!keyword) { showToast('请输入搜索关键词'); return; }
+    const freshness = $('newsSearchFreshness').value;
+    const statusEl = $('newsSearchStatus');
+    const pagEl = $('newsSearchPagination');
+
+    setStatus(statusEl, spinnerHTML() + ' 搜索中…');
+    $('btnDoNewsSearch').disabled = true;
+
+    try {
+      const params = new URLSearchParams({ q: keyword, offset, count: _newsCount });
+      const res = await fetch('/api/search/news?' + params);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const articles = data.news || data.value || [];  // Serper 用 'news'，Bing 用 'value'
+      _newsOffset = offset;
+
+      renderNewsResults(articles);
+      statusEl.textContent = '';
+      pagEl.hidden = false;
+      $('newsSearchPageLabel').textContent = `第 ${Math.floor(offset / _newsCount) + 1} 页`;
+      $('btnNewsSearchPrev').disabled = offset === 0;
+      $('btnNewsSearchNext').disabled = articles.length < _newsCount;
+    } catch (e) {
+      setStatus(statusEl, '搜索失败：' + e.message, 'error');
+      $('newsSearchPagination').hidden = true;
+    } finally {
+      $('btnDoNewsSearch').disabled = false;
+    }
+  }
+
+  if ($('btnWebSearch')) {
+    $('btnWebSearch').addEventListener('click', () => {
+      const url = ($('urlInput') && $('urlInput').value.trim()) || '';
+      const panel = $('newsSearchPanel');
+      panel.hidden = false;
+      // Pre-fill keyword from URL
+      const kw = $('newsSearchKeyword');
+      if (!kw.value && url) kw.value = _extractKeyword(url);
+      kw.focus();
+    });
+  }
+
+  if ($('btnCloseNewsSearch')) {
+    $('btnCloseNewsSearch').addEventListener('click', () => {
+      $('newsSearchPanel').hidden = true;
+    });
+  }
+
+  if ($('btnDoNewsSearch')) {
+    $('btnDoNewsSearch').addEventListener('click', () => doNewsSearch(0));
+  }
+
+  if ($('newsSearchKeyword')) {
+    $('newsSearchKeyword').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doNewsSearch(0);
+    });
+  }
+
+  if ($('btnNewsSearchPrev')) {
+    $('btnNewsSearchPrev').addEventListener('click', () => {
+      if (_newsOffset >= _newsCount) doNewsSearch(_newsOffset - _newsCount);
+    });
+  }
+
+  if ($('btnNewsSearchNext')) {
+    $('btnNewsSearchNext').addEventListener('click', () => doNewsSearch(_newsOffset + _newsCount));
+  }
+})();
+
+
+/* ── 联网图片搜索 ───────────────────────────────────────── */
+
+// 全局函数：从图片卡片触发图片搜索（以文章标题 + 图片类别为关键词）
+// 包装函数：从图片卡片按钮触发搜索（读取按钮的 data-category）
+function _searchFromCard(btn) {
+  if (!btn) return;
+  _openImageSearchForCard(btn.dataset.category || '');
+}
+
+function _openImageSearchForCard(category) {
+  const modal = $('imageSearchModal');
+  if (!modal) return;
+  modal.hidden = false;
+  const kw = $('imageSearchKeyword');
+  if (kw) {
+    let keyword = _urlPageTitle || '';
+    if (category && keyword) {
+      keyword = keyword + ' ' + category;
+    } else if (category) {
+      keyword = category;
+    } else if (!keyword && _urlPageSummary) {
+      keyword = _urlPageSummary.trim().split(/\s+/).slice(0, 10).join(' ');
+    }
+    kw.value = keyword.trim().slice(0, 100);
+    // 自动触发搜索，不需要用户再手动点搜索按钮
+    const btnSearch = $('btnDoImageSearch');
+    if (btnSearch && kw.value) btnSearch.click();
+    else kw.focus();
+  }
+}
+
+(function initImageSearch() {
+  let _imgOffset = 0;
+  const _imgCount = 20;
+
+  function _escHtmlLocal(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function proxyUrl(url) {
+    return '/api/search/proxy/image?url=' + encodeURIComponent(url);
+  }
+
+  // ── Image search ──
+  function renderImageResults(items) {
+    const el = $('imageSearchResults');
+    if (!items || items.length === 0) {
+      el.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px;grid-column:1/-1">未找到相关图片</p>';
+      return;
+    }
+    el.innerHTML = items.map((img, i) => {
+      // 兼容 Serper (imageUrl/title) 和 Bing (contentUrl/name) 格式
+      const imgName = img.title || img.name || '';
+      const thumbUrl = img.imageUrl || img.thumbnailUrl || img.contentUrl || '';
+      return `
+        <div class="img-search-card" data-idx="${i}" title="${_escHtmlLocal(imgName)}">
+          <img src="${_escHtmlLocal(proxyUrl(thumbUrl))}" alt="${_escHtmlLocal(imgName)}" loading="lazy"
+               onerror="this.src='/static/img/placeholder.png'">
+          <div class="img-search-card-overlay">
+            <span class="img-search-card-name">${_escHtmlLocal(imgName)}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Click → open image in new tab
+    el.querySelectorAll('.img-search-card').forEach((card, i) => {
+      card.addEventListener('click', () => {
+        const img = items[i];
+        if (!img) return;
+        const url = img.imageUrl || img.contentUrl || '';
+        if (url) window.open(url, '_blank', 'noopener');
+      });
+    });
+  }
+
+  async function doImageSearch(offset) {
+    const keyword = ($('imageSearchKeyword').value || '').trim();
+    if (!keyword) { showToast('请输入搜索关键词'); return; }
+    const size = $('imageSearchSize').value;
+    const color = $('imageSearchColor').value;
+    const statusEl = $('imageSearchStatus');
+    const pagEl = $('imageSearchPagination');
+
+    setStatus(statusEl, spinnerHTML() + ' 搜索中…');
+    $('btnDoImageSearch').disabled = true;
+
+    try {
+      const params = new URLSearchParams({ q: keyword, offset, count: _imgCount });
+      const res = await fetch('/api/search/images?' + params);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const items = data.images || data.value || [];  // Serper 用 'images'，Bing 用 'value'
+      _imgOffset = offset;
+
+      renderImageResults(items);
+      statusEl.textContent = '';
+      pagEl.hidden = false;
+      $('imageSearchPageLabel').textContent = `第 ${Math.floor(offset / _imgCount) + 1} 页`;
+      $('btnImageSearchPrev').disabled = offset === 0;
+      $('btnImageSearchNext').disabled = items.length < _imgCount;
+    } catch (e) {
+      setStatus(statusEl, '搜索失败：' + e.message, 'error');
+      $('imageSearchPagination').hidden = true;
+    } finally {
+      $('btnDoImageSearch').disabled = false;
+    }
+  }
+
+  // Open modal
+  if ($('btnNewsImage')) {
+    $('btnNewsImage').addEventListener('click', () => {
+      const url = ($('urlInput') && $('urlInput').value.trim()) || '';
+      $('imageSearchModal').hidden = false;
+      const kw = $('imageSearchKeyword');
+      if (!kw.value) {
+        // Prefer article title/summary; fallback to URL path
+        if (_urlPageTitle) {
+          kw.value = _urlPageTitle.trim().slice(0, 100);
+        } else if (_urlPageSummary) {
+          kw.value = _urlPageSummary.trim().split(/\s+/).slice(0, 10).join(' ').slice(0, 100);
+        } else if (url) {
+          try {
+            const u = new URL(url);
+            kw.value = u.pathname.replace(/\//g,' ').replace(/[-_]/g,' ').trim().slice(0, 60) || u.hostname;
+          } catch {}
+        }
+      }
+      kw.focus();
+    });
+  }
+
+  if ($('btnImageSearchModalClose')) {
+    $('btnImageSearchModalClose').addEventListener('click', () => {
+      $('imageSearchModal').hidden = true;
+    });
+  }
+  if ($('imageSearchModal')) {
+    $('imageSearchModal').addEventListener('click', e => {
+      if (e.target === $('imageSearchModal')) $('imageSearchModal').hidden = true;
+    });
+  }
+
+  if ($('btnDoImageSearch')) {
+    $('btnDoImageSearch').addEventListener('click', () => doImageSearch(0));
+  }
+  if ($('imageSearchKeyword')) {
+    $('imageSearchKeyword').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doImageSearch(0);
+    });
+  }
+  if ($('btnImageSearchPrev')) {
+    $('btnImageSearchPrev').addEventListener('click', () => {
+      if (_imgOffset >= _imgCount) doImageSearch(_imgOffset - _imgCount);
+    });
+  }
+  if ($('btnImageSearchNext')) {
+    $('btnImageSearchNext').addEventListener('click', () => doImageSearch(_imgOffset + _imgCount));
+  }
+})();
+
+// ────────────────────────────────────────────────────────────────
 function showToast(message) {
   const toast = document.createElement('div');
   toast.style.cssText = `
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: #2e3340;
-    color: #e4e6ed;
+    background: #1e293b;
+    color: #f1f5f9;
     padding: 12px 16px;
     border-radius: 6px;
     font-size: 0.88rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     z-index: 9999;
     animation: fadeSlideIn 0.2s ease-out;
   `;
@@ -2119,3 +2774,169 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 200);
   }, 3000);
 }
+// ════════════════════════════════════════════════════════════════
+// 文本 AI 生成检测 (XAI) 功能
+// ════════════════════════════════════════════════════════════════
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // 事件监听
+  const btnDetectText = $('btnDetectText');
+  const btnClearText = $('btnClearText');
+  const btnBackToTextInput = $('btnBackToTextInput');
+  const textInput = $('textInput');
+  const textInputPanel = $('textInput').parentElement;
+  const textResultPanel = $('textResultPanel');
+  const textLoading = $('textLoading');
+
+  if (btnDetectText) {
+    btnDetectText.addEventListener('click', detectText);
+  }
+
+  if (btnClearText) {
+    btnClearText.addEventListener('click', () => {
+      textInput.value = '';
+      textInput.focus();
+    });
+  }
+
+  if (btnBackToTextInput) {
+    btnBackToTextInput.addEventListener('click', () => {
+      textInputPanel.style.display = 'block';
+      textResultPanel.hidden = true;
+    });
+  }
+
+  async function detectText() {
+    const text = textInput.value.trim();
+    if (!text) {
+      showToast('请输入文本内容');
+      return;
+    }
+
+    const xaiMethod = document.querySelector('input[name="xai-method"]:checked').value;
+
+    textInputPanel.style.display = 'none';
+    textLoading.style.display = 'flex';
+    textResultPanel.hidden = true;
+
+    try {
+      const response = await fetch('/api/text/detect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          xai_method: xaiMethod,
+          num_features: 20
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      displayResult(result, xaiMethod);
+    } catch (e) {
+      showToast('检测失败：' + e.message);
+      textInputPanel.style.display = 'block';
+    } finally {
+      textLoading.style.display = 'none';
+    }
+  }
+
+  function displayResult(result, xaiMethod) {
+    try {
+      const label = result.label || 'UNKNOWN';
+      const confidence = result.confidence || 0;
+      const isFake = label === 'FAKE';
+
+      // 更新结果卡片
+      const badge = $('resultBadge');
+      if (badge) {
+        badge.className = 'result-badge ' + (isFake ? 'fake' : 'real');
+        badge.textContent = isFake ? 'AI\n生成' : '真实\n文本';
+      }
+
+      const resultLabel = $('resultLabel');
+      const resultConfidence = $('resultConfidence');
+      if (resultLabel) resultLabel.textContent = result.label_zh || label;
+      if (resultConfidence) resultConfidence.textContent = confidence.toFixed(1) + '%';
+
+      // 处理解释
+      if (result.explanations && result.explanations.lime) {
+        displayLimeExplanation(result.explanations.lime);
+      }
+      if (result.explanations && result.explanations.shap) {
+        displayShapExplanation(result.explanations.shap);
+        const expShapBtn = $('expShapBtn');
+        if (expShapBtn) expShapBtn.hidden = false;
+      }
+
+      // 高亮文本
+      if (result.highlighted_html) {
+        const highlightedText = $('highlightedText');
+        if (highlightedText) highlightedText.innerHTML = result.highlighted_html;
+      }
+
+      // 确保至少显示 LIME 解释
+      if (result.explanations && Object.keys(result.explanations).length === 0) {
+        const limeContent = $('limeContent');
+        if (limeContent && !limeContent.classList.contains('active')) {
+          limeContent.classList.add('active');
+        }
+      }
+
+      textResultPanel.hidden = false;
+    } catch (e) {
+      console.error('displayResult error:', e);
+      showToast('显示结果时出错：' + e.message);
+    }
+  }
+
+  function displayLimeExplanation(lime) {
+    try {
+      const fakeTokens = (lime.top_positive || []).slice(0, 10);
+      const realTokens = (lime.top_negative || []).slice(0, 10);
+
+      const fakeHtml = fakeTokens.map(t => 
+        `<div class="keyword-tag positive">${(t.token || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')} <span class="keyword-weight">${(t.weight || t.contribution || 0).toFixed(3)}</span></div>`
+      ).join('') || '<div class="keyword-tag">无明显特征</div>';
+
+      const realHtml = realTokens.map(t => 
+        `<div class="keyword-tag negative">${(t.token || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')} <span class="keyword-weight">${Math.abs(t.weight || t.contribution || 0).toFixed(3)}</span></div>`
+      ).join('') || '<div class="keyword-tag">无明显特征</div>';
+
+      const limeFakeKeywords = $('limeFakeKeywords');
+      const limeRealKeywords = $('limeRealKeywords');
+      const limeContent = $('limeContent');
+      const expLimeBtn = $('expLimeBtn');
+
+      if (limeFakeKeywords) limeFakeKeywords.innerHTML = fakeHtml;
+      if (limeRealKeywords) limeRealKeywords.innerHTML = realHtml;
+      if (limeContent) limeContent.classList.add('active');
+      if (expLimeBtn) expLimeBtn.classList.add('active');
+    } catch (e) {
+      console.error('displayLimeExplanation error:', e);
+    }
+  }
+
+  function displayShapExplanation(shap) {
+    try {
+      const tokens = (shap.tokens || []).slice(0, 15);
+      const html = tokens.map(t => {
+        const isPos = t.shap_value > 0;
+        return `<div class="keyword-tag ${isPos ? 'positive' : 'negative'}">
+        ${(t.token || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')} <span class="keyword-weight">${Math.abs(t.shap_value || 0).toFixed(3)}</span>
+      </div>`;
+      }).join('') || '<div class="keyword-tag">无明显特征</div>';
+
+      const shapKeywords = $('shapKeywords');
+      if (shapKeywords) shapKeywords.innerHTML = html;
+    } catch (e) {
+      console.error('displayShapExplanation error:', e);
+    }
+  }
+})();

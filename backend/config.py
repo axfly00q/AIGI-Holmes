@@ -3,6 +3,7 @@ AIGI-Holmes backend — application settings loaded from environment / .env file
 """
 
 import os
+import sys
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
 
     # Model
     MODEL_PATH: str = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
+        getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(__file__))),
         "finetuned_fake_real_resnet50.pth",
     )
 

@@ -4,407 +4,704 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIGI-Holmes 新闻图片真实性检测</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=4" />
+    <link rel="stylesheet" href="/static/css/style.css?v={{ cache_bust }}" />
 </head>
 <body>
-  <div class="app">
 
-    <header class="header">
-      <div class="header-inner">
-        <div class="header-brand">
-          <span class="header-logo">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-          </span>
-          <div>
-            <h1 class="header-title">AIGI-Holmes</h1>
-            <p class="header-sub">新闻图片 AI 生成检测</p>
-          </div>
+  <div class="app-layout">
+
+    <!-- ── 左侧边栏 ──────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="sidebar-logo">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </span>
+        <div>
+          <h1 class="sidebar-title">AIGI-Holmes</h1>
+          <p class="sidebar-sub">新闻图片 AI 生成检测</p>
         </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="sidebar-nav-item active" data-tab="upload">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+          </svg>
+          <span>上传图片</span>
+        </button>
+        <button class="sidebar-nav-item" data-tab="url">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/>
+          </svg>
+          <span>新闻检测</span>
+        </button>
+        <button class="sidebar-nav-item" data-tab="batch">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+          </svg>
+          <span>批量检测</span>
+        </button>
+        <button class="sidebar-nav-item" data-tab="history">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span>检测历史</span>
+        </button>
+        <button class="sidebar-nav-item" data-tab="text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 4.5v15m6.364.5L9.172 9.172a4 4 0 015.656-5.656l6.364 6.364M9 4.5L4.757 8.743a4 4 0 005.656 5.656"/>
+          </svg>
+          <span>文本检测</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
         <div class="auth-bar" id="authBar">
           <div id="authGuest">
             <button class="btn-secondary" id="btnShowLogin">登录 / 注册</button>
           </div>
           <div id="authUser" hidden>
-            <span class="auth-username" id="authUsername"></span>
-            <span class="auth-role-badge" id="authRoleBadge"></span>
-            <button class="btn-secondary btn-sm" id="btnShowRole">管理</button>
-            <button class="btn-secondary btn-sm" id="btnAdminPanel" hidden title="管理后台">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
-              </svg>
-              管理后台
-            </button>
-            <button class="btn-secondary btn-sm" id="btnLogout">退出</button>
+            <div class="sidebar-user-info">
+              <span class="auth-username" id="authUsername"></span>
+              <span class="auth-role-badge" id="authRoleBadge"></span>
+            </div>
+            <div class="sidebar-user-actions">
+              <button class="btn-secondary btn-sm" id="btnShowRole">管理</button>
+              <button class="btn-secondary btn-sm" id="btnLogout">退出</button>
+            </div>
           </div>
         </div>
       </div>
-    </header>
+    </aside>
 
-    <main class="main">
-      <div class="tabs" role="tablist">
-        <button class="tab-btn active" role="tab" data-tab="upload">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
-          </svg>
-          上传图片
-        </button>
-        <button class="tab-btn" role="tab" data-tab="url">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/>
-          </svg>
-          新闻 URL 检测
-        </button>
-        <button class="tab-btn" role="tab" data-tab="batch">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
-          </svg>
-          批量检测
-        </button>
+    <!-- ── 主内容区 ───────────────────────────────────────────── -->
+    <div class="main-content">
+      <div class="top-bar">
+        <h2 class="top-bar-title" id="topBarTitle">上传图片</h2>
       </div>
 
-      <div class="tab-pane active" id="tab-upload" role="tabpanel">
-        <div class="upload-layout">
-          <div class="upload-panel">
-            <div class="drop-zone" id="dropZone">
-              <div class="drop-hint" id="dropHint">
-                <svg class="drop-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M24 32V16M17 23l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <rect x="6" y="6" width="36" height="36" rx="6" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
-                </svg>
-                <p class="drop-text">将图像拖放到此处</p>
-                <p class="drop-or">— 或 —</p>
-                <label class="btn-secondary" for="fileInput">点击选择文件</label>
-                <input type="file" id="fileInput" accept="image/*" hidden />
+      <div class="content-body">
+
+        <!-- ====== 上传图片 ====== -->
+        <div class="tab-pane active" id="tab-upload" role="tabpanel">
+          <div class="upload-layout">
+            <div class="upload-panel">
+              <div class="drop-zone" id="dropZone">
+                <div class="drop-hint" id="dropHint">
+                  <svg class="drop-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M24 32V16M17 23l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <rect x="6" y="6" width="36" height="36" rx="6" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
+                  </svg>
+                  <p class="drop-text">将图像拖放到此处</p>
+                  <p class="drop-or">— 或 —</p>
+                  <label class="btn-secondary" for="fileInput">点击选择文件</label>
+                  <input type="file" id="fileInput" accept="image/*" hidden />
+                </div>
+                <img class="preview-img" id="previewImg" alt="预览" />
+                <img class="cam-overlay" id="camOverlay" alt="热力图" />
               </div>
-              <img class="preview-img" id="previewImg" alt="预览" />
-              <img class="cam-overlay" id="camOverlay" alt="热力图" />
+              <div class="upload-actions">
+                <button class="btn-cam-toggle" id="btnCamToggle" title="显示/隐藏热力图" hidden>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.047 8.287 8.287 0 009 9.601a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/>
+                    <path d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z"/>
+                  </svg>
+                  热力图
+                </button>
+                <button class="btn-icon" id="btnReupload" title="重新上传" hidden>
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+                </button>
+                <button class="btn-icon btn-icon--danger" id="btnClear" title="清除图片" hidden>
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
             </div>
-            <div class="upload-actions">
-              <button class="btn-cam-toggle" id="btnCamToggle" title="显示/隐藏热力图" hidden>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.047 8.287 8.287 0 009 9.601a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/>
-                  <path d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z"/>
-                </svg>
-                热力图
-              </button>
-              <button class="btn-icon" id="btnReupload" title="重新上传" hidden>
-                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
-              </button>
-              <button class="btn-icon btn-icon--danger" id="btnClear" title="清除图片" hidden>
-                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
-              </button>
+
+            <div class="result-panel">
+              <div class="result-empty" id="resultEmpty">
+                <svg class="result-empty-icon" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="2"/><path d="M16 24h16M24 16v16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <p>检测结果将显示在这里</p>
+              </div>
+
+              <div class="result-card" id="resultCard">
+                <div class="verdict" id="verdict">
+                  <span class="verdict-icon" id="verdictIcon"></span>
+                  <span class="verdict-label" id="verdictLabel"></span>
+                </div>
+                <div class="conf-section">
+                  <div class="conf-header">
+                    <span class="conf-title">置信度</span>
+                    <span class="conf-value" id="confValue">0%</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-bar" id="confBar"></div>
+                  </div>
+                </div>
+                <div class="prob-section">
+                  <p class="prob-title">各类别概率</p>
+                  <div class="prob-rows" id="probRows"></div>
+                </div>
+              </div>
+
+              <div class="report-download" id="reportDownload" hidden>
+                <p class="prob-title">下载报告</p>
+                <div class="report-btn-row">
+                  <button class="btn-report" id="btnDownloadPdf">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+                    </svg>
+                    PDF
+                  </button>
+                  <button class="btn-report" id="btnDownloadExcel">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-3.75.125v-9.75A1.125 1.125 0 013.375 7.5h1.5m0 10.875h1.875a1.125 1.125 0 001.125-1.125V8.625a1.125 1.125 0 00-1.125-1.125H6"/>
+                    </svg>
+                    Excel
+                  </button>
+                </div>
+              </div>
+
+              <!-- 快捷操作 -->
+              <div id="quickActions" class="quick-actions" hidden>
+                <p class="quick-actions__title">快捷操作</p>
+                <div class="quick-actions__row">
+                  <button id="btnMarkMisjudge" class="btn-misjudge">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                    </svg>
+                    标记误判
+                  </button>
+                  <button id="btnRedetect" class="btn-redetect">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                    </svg>
+                    重新检测
+                  </button>
+                  <button id="btnShare" class="btn-share">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
+                    </svg>
+                    分享同事
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
 
-          <div class="result-panel">
-            <div class="result-empty" id="resultEmpty">
-              <svg class="result-empty-icon" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="2"/><path d="M16 24h16M24 16v16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              <p>检测结果将显示在这里</p>
+          <button class="btn-detect" id="btnDetect" disabled>开始检测</button>
+          <p class="status-msg" id="uploadStatus"></p>
+
+          <!-- 检测依据 — 全宽区块，检测后展示 -->
+          <details class="explain-section explain-section--fw" id="explainSection" hidden>
+            <summary class="explain-toggle">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+              </svg>
+              检测依据
+            </summary>
+            <div class="explain-body" id="explainBody">
+              <div class="explain-level" id="explainLevel"></div>
+              <p class="explain-summary" id="explainSummary"></p>
+              <ul class="explain-clues" id="explainClues"></ul>
+              <p class="explain-disclaimer" id="explainDisclaimer"></p>
+            </div>
+          </details>
+
+          <!-- AI 智能分析面板 -->
+          <div class="ai-analysis-panel" id="aiAnalysisPanel" hidden>
+            <div class="ai-analysis-header">
+              <h3 class="ai-analysis-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                </svg>
+                AI 智能分析
+              </h3>
+              <p class="ai-analysis-subtitle">输入你的提问，我来帮你分析为什么这张图片被判定为 AI 生成</p>
             </div>
 
-            <div class="result-card" id="resultCard">
-              <div class="verdict" id="verdict">
-                <span class="verdict-icon" id="verdictIcon"></span>
-                <span class="verdict-label" id="verdictLabel"></span>
-              </div>
-              <div class="conf-section">
-                <div class="conf-header">
-                  <span class="conf-title">置信度</span>
-                  <span class="conf-value" id="confValue">0%</span>
-                </div>
-                <div class="progress-track">
-                  <div class="progress-bar" id="confBar"></div>
-                </div>
-              </div>
-              <div class="prob-section">
-                <p class="prob-title">各类别概率</p>
-                <div class="prob-rows" id="probRows"></div>
+            <!-- 对话消息容器 -->
+            <div class="chat-container" id="chatContainer"></div>
+
+            <div class="analysis-error" id="analysisError" hidden></div>
+
+            <div class="ai-analysis-form">
+              <textarea id="analysisQuestion" class="analysis-input" placeholder="例如：这张图片的哪些特征表明它是 AI 生成的？" rows="3"></textarea>
+              <button id="btnAnalyze" class="btn-analyze">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16.6915026,12.4744748 L3.50612381,13.2599618 C3.19218625,13.2599618 3.03521743,13.4170592 3.03521743,13.5741566 L1.15159189,20.0151496 C0.8376543,20.8006365 0.99,21.89 1.77946707,22.52 C2.41,22.99 3.50612381,23.1 4.13399899,22.8429026 L21.714504,14.0454487 C22.6563168,13.5741566 23.1272231,12.6315722 22.9702544,11.6889879 L4.13399899,1.16151496 C3.34915502,0.9 2.40734225,1.00636533 1.77946707,1.4776575 C0.994623095,2.10604706 0.837654326,3.0486314 1.15159189,3.99 L3.03521743,10.4309929 C3.03521743,10.5880903 3.19218625,10.7451887 3.50612381,10.7451887 L16.6915026,11.5306756 C16.6915026,11.5306756 17.1624089,11.5306756 17.1624089,12.0019677 C17.1624089,12.4744748 16.6915026,12.4744748 16.6915026,12.4744748 Z"/>
+                </svg>
+                发送提问
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====== 新闻 URL 检测 ====== -->
+        <div class="tab-pane" id="tab-url" role="tabpanel">
+          <div class="url-row">
+            <input class="url-input" id="urlInput" type="url" placeholder="https://example.com/news/article" autocomplete="off" />
+            <button class="btn-url" id="btnUrl">抓取并检测</button>
+          </div>
+
+          <!-- 新增：联网查找 & 新闻图片检测按钮 -->
+          <div class="url-extra-actions">
+            <button class="btn-secondary" id="btnWebSearch">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+              </svg>
+              联网查找相关内容
+            </button>
+            <button class="btn-secondary" id="btnNewsImage">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
+                <path d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
+              </svg>
+              新闻图片检测
+            </button>
+          </div>
+
+          <p class="status-msg" id="urlStatus"></p>
+
+          <!-- 联网新闻搜索面板（btnWebSearch 触发） -->
+          <div class="search-panel" id="newsSearchPanel" hidden>
+            <div class="search-panel-header">
+              <h3 class="search-panel-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                联网查找相关新闻
+              </h3>
+              <button class="search-panel-close" id="btnCloseNewsSearch">&times;</button>
+            </div>
+            <div class="search-controls">
+              <input class="search-keyword-input" id="newsSearchKeyword" type="text" placeholder="输入关键词搜索相关新闻…" autocomplete="off" />
+              <select class="search-filter-select" id="newsSearchFreshness">
+                <option value="">全部时间</option>
+                <option value="Day">24小时内</option>
+                <option value="Week">一周内</option>
+                <option value="Month">一个月内</option>
+              </select>
+              <button class="btn-search-go" id="btnDoNewsSearch">搜索</button>
+            </div>
+            <p class="status-msg" id="newsSearchStatus"></p>
+            <div class="news-results" id="newsSearchResults"></div>
+            <div class="search-pagination" id="newsSearchPagination" hidden>
+              <button class="btn-page" id="btnNewsSearchPrev" disabled>上一页</button>
+              <span class="page-indicator" id="newsSearchPageLabel">第 1 页</span>
+              <button class="btn-page" id="btnNewsSearchNext">下一页</button>
+            </div>
+          </div>
+
+          <!-- 新闻摘要区域 -->
+          <div class="url-summary-panel" id="urlSummaryPanel" hidden>
+            <div class="url-summary-header">
+              <span class="url-summary-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6V7.5z"/>
+                </svg>
+              </span>
+              <div style="flex:1;min-width:0;">
+                <h3 class="url-summary-title" id="urlPageTitle">新闻标题</h3>
+                <p class="url-summary-text" id="urlPageSummary">新闻摘要内容</p>
+                <div id="urlSummaryTranslated" style="display:none;color:#a5b4fc;font-size:0.88rem;margin-top:6px;line-height:1.6;"></div>
+                <button id="btnTranslateSummary" class="btn-translate" style="display:none;margin-top:8px;">翻译成中文</button>
               </div>
             </div>
+          </div>
 
-            <div class="report-download" id="reportDownload" hidden>
-              <p class="prob-title">下载报告</p>
+          <!-- 文章文本检测 -->
+          <div class="url-text-detect-wrap" id="urlTextDetectWrap" hidden>
+            <div class="url-text-detect-bar">
+              <div class="url-text-detect-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"/>
+                </svg>
+                <span>文章文本真实性检测</span>
+              </div>
+              <button class="btn-secondary btn-sm" id="btnDetectUrlText">检测文章文本</button>
+            </div>
+            <div class="url-text-detect-result" id="urlTextDetectResult" hidden></div>
+          </div>
+
+          <!-- 多维分析面板 -->
+          <div class="url-analysis-layout" id="urlAnalysisLayout" hidden>
+            <div class="url-gallery-col">
+              <div class="gallery" id="gallery"></div>
+            </div>
+            <div class="url-stats-panel" id="urlStatsPanel">
+              <!-- 总体评分 -->
+              <div class="url-score-wrap">
+                <span class="stats-label">综合可信度评分</span>
+                <div class="url-score-circle" id="urlScoreCircle">
+                  <svg viewBox="0 0 100 100" class="url-score-svg" width="80" height="80">
+                    <circle cx="50" cy="50" r="44" class="url-score-bg"/>
+                    <circle cx="50" cy="50" r="44" class="url-score-fg" id="urlScoreArc" stroke-dasharray="0 277"/>
+                  </svg>
+                  <span class="url-score-value" id="urlScoreValue">--</span>
+                </div>
+              </div>
+              <!-- 多维雷达图 -->
+              <div class="stats-radar-title">多维度分析</div>
+              <div id="urlRadarChart" class="url-radar-chart"></div>
+              <!-- 图文一致性 -->
+              <div class="url-consistency-wrap">
+                <span class="stats-label">图文一致性</span>
+                <div class="url-consistency-bar">
+                  <div class="url-consistency-fill" id="urlConsistencyBar"></div>
+                </div>
+                <span class="url-consistency-text" id="urlConsistencyText">--</span>
+              </div>
+              <!-- 分类统计 -->
+              <div class="stats-radar-title">内容分类</div>
+              <div class="stats-cats" id="urlCatTags"></div>
+              <!-- 统计数据 -->
+              <div class="url-stats-counts">
+                共 <span id="urlStatsTotal">0</span> 张 ·
+                真实 <span class="stats-real" id="urlStatsReal">0</span> 张 ·
+                AI生成 <span class="stats-fake" id="urlStatsFake">0</span> 张
+              </div>
+            </div>
+          </div>
+
+          <!-- 快速操作工具栏 -->
+          <div class="url-quick-actions" id="urlQuickActions" hidden>
+            <button class="quick-action-btn" id="btnUrlShare">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
+              </svg>
+              分享链接
+            </button>
+            <button class="quick-action-btn" id="btnUrlScrollTop">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"/>
+              </svg>
+              回到顶部
+            </button>
+          </div>
+
+          <!-- 汇总报告 -->
+          <div class="report-section" id="reportSection" hidden>
+            <div class="report-section-header">
+              <h3 class="report-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+                </svg>
+                可视化检测报告
+              </h3>
               <div class="report-btn-row">
-                <button class="btn-report" id="btnDownloadPdf">
+                <button class="btn-report" id="btnUrlExportPdf">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
                   </svg>
-                  PDF
-                </button>
-                <button class="btn-report" id="btnDownloadExcel">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-3.75.125v-9.75A1.125 1.125 0 013.375 7.5h1.5m0 10.875h1.875a1.125 1.125 0 001.125-1.125V8.625a1.125 1.125 0 00-1.125-1.125H6"/>
-                  </svg>
-                  Excel
+                  导出PDF
                 </button>
               </div>
             </div>
-
-            <!-- 快捷操作 -->
-            <div id="quickActions" class="quick-actions" hidden>
-              <p class="quick-actions__title">快捷操作</p>
-              <div class="quick-actions__row">
-                <button id="btnMarkMisjudge" class="btn-misjudge">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-                  </svg>
-                  标记误判
-                </button>
-                <button id="btnRedetect" class="btn-redetect">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
-                  </svg>
-                  重新检测
-                </button>
-                <button id="btnShare" class="btn-share">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
-                  </svg>
-                  分享同事
-                </button>
-              </div>
-            </div>
-
+            <div class="report-body" id="reportBody"></div>
+            <!-- 报告维度总结 -->
+            <div class="report-dimensions" id="reportDimensions"></div>
           </div>
         </div>
 
-        <button class="btn-detect" id="btnDetect" disabled>开始检测</button>
-        <p class="status-msg" id="uploadStatus"></p>
+        <!-- ====== 批量检测 ====== -->
+        <div class="tab-pane" id="tab-batch" role="tabpanel">
+          <div class="batch-hint" id="batchAuthHint" hidden>
+            <p>批量检测需要 <strong>auditor</strong> 或 <strong>admin</strong> 账号登录后使用。</p>
+          </div>
 
-        <!-- 检测依据 — 全宽区块，检测后展示 -->
-        <details class="explain-section explain-section--fw" id="explainSection" hidden>
-          <summary class="explain-toggle">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+          <!-- 层1：初始大拖拽区 -->
+          <div class="batch-landing" id="batchLanding">
+            <svg class="drop-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M24 32V16M17 23l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <rect x="6" y="6" width="36" height="36" rx="6" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
             </svg>
-            检测依据
-          </summary>
-          <div class="explain-body" id="explainBody">
-            <div class="explain-level" id="explainLevel"></div>
-            <p class="explain-summary" id="explainSummary"></p>
-            <ul class="explain-clues" id="explainClues"></ul>
-            <p class="explain-disclaimer" id="explainDisclaimer"></p>
-          </div>
-        </details>
-
-        <!-- AI 智能分析面板 -->
-        <div class="ai-analysis-panel" id="aiAnalysisPanel" hidden>
-          <div class="ai-analysis-header">
-            <h3 class="ai-analysis-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
-              </svg>
-              AI 智能分析
-            </h3>
-            <p class="ai-analysis-subtitle">输入你的提问，我来帮你分析为什么这张图片被判定为 AI 生成</p>
-          </div>
-
-          <!-- 对话消息容器 -->
-          <div class="chat-container" id="chatContainer"></div>
-
-          <div class="analysis-error" id="analysisError" hidden></div>
-
-          <div class="ai-analysis-form">
-            <textarea id="analysisQuestion" class="analysis-input" placeholder="例如：这张图片的哪些特征表明它是 AI 生成的？" rows="3"></textarea>
-            <button id="btnAnalyze" class="btn-analyze">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M16.6915026,12.4744748 L3.50612381,13.2599618 C3.19218625,13.2599618 3.03521743,13.4170592 3.03521743,13.5741566 L1.15159189,20.0151496 C0.8376543,20.8006365 0.99,21.89 1.77946707,22.52 C2.41,22.99 3.50612381,23.1 4.13399899,22.8429026 L21.714504,14.0454487 C22.6563168,13.5741566 23.1272231,12.6315722 22.9702544,11.6889879 L4.13399899,1.16151496 C3.34915502,0.9 2.40734225,1.00636533 1.77946707,1.4776575 C0.994623095,2.10604706 0.837654326,3.0486314 1.15159189,3.99 L3.03521743,10.4309929 C3.03521743,10.5880903 3.19218625,10.7451887 3.50612381,10.7451887 L16.6915026,11.5306756 C16.6915026,11.5306756 17.1624089,11.5306756 17.1624089,12.0019677 C17.1624089,12.4744748 16.6915026,12.4744748 16.6915026,12.4744748 Z"/>
-              </svg>
-              发送提问
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="tab-pane" id="tab-url" role="tabpanel">
-        <div class="url-row">
-          <input class="url-input" id="urlInput" type="url" placeholder="https://example.com/news/article" autocomplete="off" />
-          <button class="btn-url" id="btnUrl">抓取并检测</button>
-        </div>
-        <p class="status-msg" id="urlStatus"></p>
-
-        <!-- 新闻摘要区域 -->
-        <div class="url-summary-panel" id="urlSummaryPanel" hidden>
-          <div class="url-summary-header">
-            <span class="url-summary-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6V7.5z"/>
-              </svg>
-            </span>
-            <div style="flex:1;min-width:0;">
-              <h3 class="url-summary-title" id="urlPageTitle">新闻标题</h3>
-              <p class="url-summary-text" id="urlPageSummary">新闻摘要内容</p>
-              <div id="urlSummaryTranslated" style="display:none;color:#a5b4fc;font-size:0.88rem;margin-top:6px;line-height:1.6;"></div>
-              <button id="btnTranslateSummary" class="btn-translate" style="display:none;margin-top:8px;">翻译成中文</button>
+            <p class="drop-text">拖入文件开始检测</p>
+            <p class="drop-or">支持图片 · PDF · DOCX · HTML · TXT，自动提取内嵌图片</p>
+            <div class="batch-file-chips">
+              <span class="batch-chip">.jpg</span>
+              <span class="batch-chip">.png</span>
+              <span class="batch-chip">.pdf</span>
+              <span class="batch-chip">.docx</span>
+              <span class="batch-chip">.html</span>
+              <span class="batch-chip">.txt</span>
             </div>
+            <label class="btn-secondary" for="batchInput">点击选择文件</label>
+            <input type="file" id="batchInput" accept="image/*,.txt,.html,.htm,.pdf,.docx" multiple hidden />
+            <button class="btn-secondary" id="btnPickFolder" type="button">选择文件夹</button>
+            <input type="file" id="folderInput" webkitdirectory multiple hidden />
           </div>
-        </div>
 
-        <!-- 多维分析面板 -->
-        <div class="url-analysis-layout" id="urlAnalysisLayout" hidden>
-          <div class="url-gallery-col">
-            <div class="gallery" id="gallery"></div>
-          </div>
-          <div class="url-stats-panel" id="urlStatsPanel">
-            <!-- 总体评分 -->
-            <div class="url-score-wrap">
-              <span class="stats-label">综合可信度评分</span>
-              <div class="url-score-circle" id="urlScoreCircle">
-                <svg viewBox="0 0 100 100" class="url-score-svg" width="80" height="80">
-                  <circle cx="50" cy="50" r="44" class="url-score-bg"/>
-                  <circle cx="50" cy="50" r="44" class="url-score-fg" id="urlScoreArc" stroke-dasharray="0 277"/>
-                </svg>
-                <span class="url-score-value" id="urlScoreValue">--</span>
+          <!-- 层2：收缩顶部控制条 -->
+          <div class="batch-bar" id="batchBar" hidden>
+            <label class="btn-secondary btn-sm batch-bar__add" for="batchInput">+ 继续添加</label>
+            <button class="btn-secondary btn-sm batch-bar__add" id="btnPickFolderBar" type="button">+ 添加文件夹</button>
+            <div class="batch-progress-wrap">
+              <div class="batch-progress-row">
+                <span class="batch-progress-label" id="uploadLabel">上传中 0%</span>
+                <div class="batch-progress-track"><div class="batch-progress-fill" id="uploadProgressBar"></div></div>
+              </div>
+              <div class="batch-progress-row">
+                <span class="batch-progress-label" id="detectLabel">检测进度 0/0</span>
+                <div class="batch-progress-track"><div class="batch-progress-fill batch-progress-fill--detect" id="detectProgressBar"></div></div>
               </div>
             </div>
-            <!-- 多维雷达图 -->
-            <div class="stats-radar-title">多维度分析</div>
-            <div id="urlRadarChart" class="url-radar-chart"></div>
-            <!-- 图文一致性 -->
-            <div class="url-consistency-wrap">
-              <span class="stats-label">图文一致性</span>
-              <div class="url-consistency-bar">
-                <div class="url-consistency-fill" id="urlConsistencyBar"></div>
+            <button class="btn-icon btn-icon--danger" id="btnBatchCancel" title="取消">✕</button>
+          </div>
+
+          <!-- 层3：结果区（左图片网格逐个追加 + 右统计面板实时更新） -->
+          <p class="status-msg" id="batchStatus"></p>
+          <div class="batch-result-layout" id="batchResultLayout" hidden>
+            <!-- 左栏：图片网格（逐个追加，检测出一个显示一个） -->
+            <div class="batch-gallery-col">
+              <div class="gallery" id="batchGallery"></div>
+            </div>
+            <!-- 右栏：统计面板（每张结果实时刷新） -->
+            <div class="batch-stats-panel" id="batchStatsPanel">
+              <div class="stats-credibility-wrap">
+                <span class="stats-label">总体可信率</span>
+                <div class="stats-credibility-row">
+                  <span class="stats-value" id="statsCredibility">--</span>
+                  <span class="stats-unit">%</span>
+                </div>
               </div>
-              <span class="url-consistency-text" id="urlConsistencyText">--</span>
-            </div>
-            <!-- 分类统计 -->
-            <div class="stats-radar-title">内容分类</div>
-            <div class="stats-cats" id="urlCatTags"></div>
-            <!-- 统计数据 -->
-            <div class="url-stats-counts">
-              共 <span id="urlStatsTotal">0</span> 张 ·
-              真实 <span class="stats-real" id="urlStatsReal">0</span> 张 ·
-              AI生成 <span class="stats-fake" id="urlStatsFake">0</span> 张
+              <div class="stats-counts">
+                共 <span id="statsTotal">0</span> 张 &nbsp;·&nbsp;
+                真实 <span class="stats-real" id="statsReal">0</span> 张 &nbsp;·&nbsp;
+                AI生成 <span class="stats-fake" id="statsFake">0</span> 张
+              </div>
+              <div class="stats-radar-title">内容分类分布</div>
+              <div id="statsRadar"></div>
+              <div class="stats-cats" id="statsCats"></div>
             </div>
           </div>
         </div>
 
-        <!-- 快速操作工具栏 -->
-        <div class="url-quick-actions" id="urlQuickActions" hidden>
-          <button class="quick-action-btn" id="btnUrlShare">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
-            </svg>
-            分享链接
-          </button>
-          <button class="quick-action-btn" id="btnUrlScrollTop">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"/>
-            </svg>
-            回到顶部
-          </button>
-        </div>
+        <!-- ====== 检测历史 (NEW) ====== -->
+        <div class="tab-pane" id="tab-history" role="tabpanel">
+          <!-- 子标签栏 — 管理员可见"管理后台"，普通用户/审核员仅显示"我的记录" -->
+          <div class="history-tabs" id="historyTabs">
+            <button class="history-tab-btn active" data-history-tab="my-records">我的记录</button>
+            <button class="history-tab-btn history-tab-admin" data-history-tab="admin-panel">管理后台</button>
+          </div>
 
-        <!-- 汇总报告 -->
-        <div class="report-section" id="reportSection" hidden>
-          <div class="report-section-header">
-            <h3 class="report-title">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
-              </svg>
-              可视化检测报告
-            </h3>
-            <div class="report-btn-row">
-              <button class="btn-report" id="btnUrlExportPdf">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-                </svg>
-                导出PDF
-              </button>
+          <!-- 子面板：我的记录 -->
+          <div class="history-pane active" id="history-my-records">
+            <div class="admin-filter-row">
+              <input class="admin-search-input" id="myRecordsSearch" placeholder="搜索检测记录…" autocomplete="off" />
+              <select class="admin-filter-select" id="myRecordsLabelFilter">
+                <option value="">全部结果</option>
+                <option value="FAKE">AI生成</option>
+                <option value="REAL">真实</option>
+              </select>
+              <span class="admin-total-hint" id="myRecordsTotal"></span>
             </div>
+            <div class="admin-table-wrap" id="myRecordsTable"></div>
+            <div class="admin-pagination" id="myRecordsPagination"></div>
           </div>
-          <div class="report-body" id="reportBody"></div>
-          <!-- 报告维度总结 -->
-          <div class="report-dimensions" id="reportDimensions"></div>
-        </div>
-      </div>
 
-      <div class="tab-pane" id="tab-batch" role="tabpanel">
-        <div class="batch-hint" id="batchAuthHint" hidden>
-          <p>批量检测需要 <strong>auditor</strong> 或 <strong>admin</strong> 账号登录后使用。</p>
-        </div>
-
-        <!-- 层1：初始大拖拽区 -->
-        <div class="batch-landing" id="batchLanding">
-          <svg class="drop-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M24 32V16M17 23l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <rect x="6" y="6" width="36" height="36" rx="6" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
-          </svg>
-          <p class="drop-text">拖入文件开始检测</p>
-          <p class="drop-or">支持图片 · PDF · DOCX · HTML · TXT，自动提取内嵌图片</p>
-          <div class="batch-file-chips">
-            <span class="batch-chip">.jpg</span>
-            <span class="batch-chip">.png</span>
-            <span class="batch-chip">.pdf</span>
-            <span class="batch-chip">.docx</span>
-            <span class="batch-chip">.html</span>
-            <span class="batch-chip">.txt</span>
-          </div>
-          <label class="btn-secondary" for="batchInput">点击选择文件</label>
-          <input type="file" id="batchInput" accept="image/*,.txt,.html,.htm,.pdf,.docx" multiple hidden />
-          <button class="btn-secondary" id="btnPickFolder" type="button">选择文件夹</button>
-          <input type="file" id="folderInput" webkitdirectory multiple hidden />
-        </div>
-
-        <!-- 层2：收缩顶部控制条 -->
-        <div class="batch-bar" id="batchBar" hidden>
-          <label class="btn-secondary btn-sm batch-bar__add" for="batchInput">+ 继续添加</label>
-          <button class="btn-secondary btn-sm batch-bar__add" id="btnPickFolderBar" type="button">+ 添加文件夹</button>
-          <div class="batch-progress-wrap">
-            <div class="batch-progress-row">
-              <span class="batch-progress-label" id="uploadLabel">上传中 0%</span>
-              <div class="batch-progress-track"><div class="batch-progress-fill" id="uploadProgressBar"></div></div>
+          <!-- 子面板：管理后台 (仅admin可见) -->
+          <div class="history-pane" id="history-admin-panel">
+            <!-- 管理后台内部子标签 -->
+            <div class="admin-sub-tabs" id="adminSubTabs">
+              <button class="admin-sub-tab-btn active" data-admin-tab="dashboard">仪表盘</button>
+              <button class="admin-sub-tab-btn" data-admin-tab="users">用户管理</button>
+              <button class="admin-sub-tab-btn" data-admin-tab="detections">所有记录</button>
+              <button class="admin-sub-tab-btn" data-admin-tab="feedback">误判反馈</button>
             </div>
-            <div class="batch-progress-row">
-              <span class="batch-progress-label" id="detectLabel">检测进度 0/0</span>
-              <div class="batch-progress-track"><div class="batch-progress-fill batch-progress-fill--detect" id="detectProgressBar"></div></div>
-            </div>
-          </div>
-          <button class="btn-icon btn-icon--danger" id="btnBatchCancel" title="取消">✕</button>
-        </div>
 
-        <!-- 层3：结果区（两栏：左图片网格 + 右统计面板） -->
-        <p class="status-msg" id="batchStatus"></p>
-        <div class="batch-result-layout" id="batchResultLayout" hidden>
-          <!-- 左栏：图片网格 -->
-          <div class="batch-gallery-col">
-            <div class="gallery" id="batchGallery"></div>
-          </div>
-          <!-- 右栏：统计面板 -->
-          <div class="batch-stats-panel" id="batchStatsPanel">
-            <div class="stats-credibility-wrap">
-              <span class="stats-label">总体可信率</span>
-              <div class="stats-credibility-row">
-                <span class="stats-value" id="statsCredibility">--</span>
-                <span class="stats-unit">%</span>
+            <!-- 管理子面板：仪表盘 -->
+            <div class="admin-sub-pane active" id="admin-sub-dashboard">
+              <div class="admin-stats-grid" id="adminStatsCards"></div>
+              <div class="admin-chart-card">
+                <h3>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"/>
+                  </svg>
+                  近7天检测量趋势
+                </h3>
+                <canvas id="adminDailyChart" height="200"></canvas>
+              </div>
+              <div class="admin-chart-card">
+                <h3>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+                  </svg>
+                  Top 5 来源
+                </h3>
+                <canvas id="adminSceneChart" height="200"></canvas>
               </div>
             </div>
-            <div class="stats-counts">
-              共 <span id="statsTotal">0</span> 张 &nbsp;·&nbsp;
-              真实 <span class="stats-real" id="statsReal">0</span> 张 &nbsp;·&nbsp;
-              AI生成 <span class="stats-fake" id="statsFake">0</span> 张
+
+            <!-- 管理子面板：用户管理 -->
+            <div class="admin-sub-pane" id="admin-sub-users">
+              <div class="admin-filter-row">
+                <input class="admin-search-input" id="adminUsersSearch" placeholder="搜索用户名…" autocomplete="off" />
+                <select class="admin-filter-select" id="adminUsersRoleFilter">
+                  <option value="">全部角色</option>
+                  <option value="admin">管理员</option>
+                  <option value="auditor">审核员</option>
+                  <option value="user">普通用户</option>
+                </select>
+                <span class="admin-total-hint" id="adminUsersTotal"></span>
+              </div>
+              <div class="admin-table-wrap" id="adminUsersTable"></div>
+              <div class="admin-pagination" id="adminUsersPagination"></div>
             </div>
-            <div class="stats-radar-title">内容分类分布</div>
-            <div id="statsRadar"></div>
-            <div class="stats-cats" id="statsCats"></div>
+
+            <!-- 管理子面板：所有记录 -->
+            <div class="admin-sub-pane" id="admin-sub-detections">
+              <div class="admin-filter-row">
+                <input class="admin-search-input" id="adminDetectionsSearch" placeholder="搜索来源 URL…" autocomplete="off" />
+                <select class="admin-filter-select" id="adminDetectionsLabelFilter">
+                  <option value="">全部结果</option>
+                  <option value="FAKE">AI生成</option>
+                  <option value="REAL">真实</option>
+                </select>
+                <span class="admin-total-hint" id="adminDetectionsTotal"></span>
+              </div>
+              <div class="admin-table-wrap" id="adminDetectionsTable"></div>
+              <div class="admin-pagination" id="adminDetectionsPagination"></div>
+            </div>
+
+            <!-- 管理子面板：误判反馈 -->
+            <div class="admin-sub-pane" id="admin-sub-feedback">
+              <div class="admin-filter-row">
+                <span class="admin-total-hint" id="adminFeedbackTotal"></span>
+                <button class="admin-btn-action" id="btnIntegrateTraining">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
+                  </svg>
+                  集成到训练集
+                </button>
+                <span id="integrateStatus" class="integrate-status-text"></span>
+              </div>
+              <div class="admin-table-wrap" id="adminFeedbackTable"></div>
+              <div class="admin-pagination" id="adminFeedbackPagination"></div>
+            </div>
           </div>
         </div>
-      </div>
-    </main>
 
-    <footer class="footer">
-      <p>模型：本地微调 ResNet50（<code>finetuned_fake_real_resnet50.pth</code>），基于 AI 生成 vs 真实图片数据集训练</p>
-      <p>提示：结果仅供参考，复杂或高质量 AI 图片可能难以被检测。</p>
-    </footer>
+        <!-- ====== 文本检测 (XAI) ====== -->
+        <div class="tab-pane" id="tab-text" role="tabpanel">
+          <div class="text-detect-layout">
+            <div class="text-input-panel">
+              <label class="form-label">输入待检测文本</label>
+              <textarea id="textInput" class="text-input" placeholder="粘贴要检测的文章、新闻或文本...&#10;支持中英文混合内容" rows="8"></textarea>
+
+              <div class="text-options">
+                <div class="option-group">
+                  <label class="form-label">解释方法</label>
+                  <div class="option-buttons">
+                    <label><input type="radio" name="xai-method" value="lime" checked> LIME (快速)</label>
+                    <label><input type="radio" name="xai-method" value="shap"> SHAP (精确)</label>
+                    <label><input type="radio" name="xai-method" value="both"> 两者都用</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="text-actions">
+                <button class="btn-primary" id="btnDetectText">开始检测</button>
+                <button class="btn-secondary" id="btnClearText">清空</button>
+              </div>
+            </div>
+
+            <div class="text-result-panel" id="textResultPanel" hidden>
+              <div class="result-header">
+                <h3>检测结果</h3>
+                <button class="btn-secondary btn-sm" id="btnBackToTextInput">返回</button>
+              </div>
+
+              <div class="result-card">
+                <div class="result-badge" id="resultBadge"></div>
+                <div class="result-info">
+                  <div class="info-item">
+                    <span class="info-label">判定结果:</span>
+                    <span class="info-value" id="resultLabel"></span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">置信度:</span>
+                    <span class="info-value" id="resultConfidence"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="result-explanation">
+                <h4>关键词分析</h4>
+                <div class="explanation-tabs">
+                  <button class="exp-tab-btn active" id="expLimeBtn">LIME 解释</button>
+                  <button class="exp-tab-btn" id="expShapBtn" hidden>SHAP 解释</button>
+                </div>
+
+                <div class="exp-content" id="limeContent">
+                  <h5>支持 AI 生成的关键词</h5>
+                  <div class="keyword-list" id="limeFakeKeywords"></div>
+
+                  <h5>支持真实文本的关键词</h5>
+                  <div class="keyword-list" id="limeRealKeywords"></div>
+                </div>
+
+                <div class="exp-content" id="shapContent" hidden>
+                  <h5>SHAP 特征重要性</h5>
+                  <div class="keyword-list" id="shapKeywords"></div>
+                </div>
+              </div>
+
+              <div class="highlighted-text">
+                <h4>标注文本（关键词高亮）</h4>
+                <div class="text-box" id="highlightedText"></div>
+              </div>
+            </div>
+
+            <div class="text-loading" id="textLoading" hidden>
+              <div class="spinner"></div>
+              <p>正在检测文本...</p>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /.content-body -->
+    </div><!-- /.main-content -->
+
+  </div><!-- /.app-layout -->
+
+  <!-- ── 悬浮球 ──────────────────────────────────────────────── -->
+  <div class="floating-ball" id="floatingBall">
+    <div class="floating-ball__avatar" id="floatingBallAvatar">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+      </svg>
+    </div>
+  </div>
+  <div class="floating-panel" id="floatingPanel" hidden>
+    <div class="floating-panel__header">
+      <span>常见问题</span>
+      <button class="floating-panel__close" id="floatingPanelClose">&times;</button>
+    </div>
+    <div class="floating-panel__body" id="floatingPanelBody">
+      <div class="faq-list" id="faqList"></div>
+      <div class="faq-answer" id="faqAnswer" hidden>
+        <button class="faq-back" id="faqBack">&larr; 返回问题列表</button>
+        <div class="faq-answer-content" id="faqAnswerContent"></div>
+      </div>
+    </div>
+    <div class="floating-panel__footer">
+      <button class="faq-refresh" id="faqRefresh" title="换一批问题">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+        </svg>
+        换一批
+      </button>
+    </div>
   </div>
 
   <!-- ── 登录/注册弹窗（原有） ──────────────────────────────────── -->
   <div class="modal-overlay" id="loginModal" hidden>
     <div class="modal">
-      <button class="modal-close" id="btnModalClose">✕</button>
+      <button class="modal-close" id="btnModalClose">&times;</button>
       <div class="modal-tabs">
         <button class="modal-tab-btn active" id="tabLoginBtn">登录</button>
         <button class="modal-tab-btn" id="tabRegisterBtn">注册</button>
@@ -427,13 +724,13 @@
   <!-- ── 角色管理弹窗（原有） ────────────────────────────────── -->
   <div class="modal-overlay" id="roleModal" hidden>
     <div class="modal">
-      <button class="modal-close" id="btnRoleModalClose">✕</button>
+      <button class="modal-close" id="btnRoleModalClose">&times;</button>
       <h3 class="modal-title">角色管理</h3>
       <div id="roleStep1">
         <p class="role-step-hint">请输入管理密码以继续：</p>
         <input class="url-input" id="rolePass" type="password" placeholder="管理密码" autocomplete="off" />
         <button class="btn-detect" id="btnRoleUnlock">验证</button>
-        <p class="role-error-msg" id="rolePassError" hidden>❌ 密码错误，请重新输入</p>
+        <p class="role-error-msg" id="rolePassError" hidden>密码错误，请重新输入</p>
       </div>
       <div id="roleStep2" hidden>
         <p class="role-step-hint">输入目标用户名，选择新角色：</p>
@@ -449,107 +746,60 @@
     </div>
   </div>
 
-  <!-- ✅ 新增：快捷操作统一风格弹窗（复用登录弹窗样式） -->
+  <!-- 快捷操作统一风格弹窗（复用登录弹窗样式） -->
   <div class="modal-overlay" id="actionModal" hidden>
     <div class="modal">
-      <button class="modal-close" id="btnActionModalClose">✕</button>
+      <button class="modal-close" id="btnActionModalClose">&times;</button>
       <div id="actionModalContent">
         <!-- 内容由JS动态填充 -->
       </div>
     </div>
   </div>
 
-  <!-- ── 管理后台面板（嵌入式） ──────────────────────────────── -->
-  <div class="modal-overlay" id="adminPanelModal" hidden>
-    <div class="admin-panel-modal">
-      <div class="admin-panel-header">
-        <h2>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+  <!-- 图片搜索弹窗（btnNewsImage 触发） -->
+  <div class="modal-overlay" id="imageSearchModal" hidden>
+    <div class="modal modal--wide">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
+            <path d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
           </svg>
-          管理后台
-        </h2>
-        <div class="admin-panel-tabs">
-          <button class="admin-tab-btn active" data-admin-tab="dashboard">仪表盘</button>
-          <button class="admin-tab-btn" data-admin-tab="users">用户管理</button>
-          <button class="admin-tab-btn" data-admin-tab="detections">检测记录</button>
-          <button class="admin-tab-btn" data-admin-tab="feedback">误判反馈</button>
-        </div>
-        <button class="modal-close" id="btnAdminPanelClose">✕</button>
+          新闻图片搜索
+        </h3>
+        <button class="modal-close" id="btnImageSearchModalClose">&times;</button>
       </div>
-      <div class="admin-panel-body">
-        <!-- 仪表盘 -->
-        <div class="admin-pane active" id="admin-dashboard">
-          <div class="admin-stats-grid" id="adminStatsCards"></div>
-          <div class="admin-chart-card">
-            <h3>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"/>
-              </svg>
-              近7天检测量趋势
-            </h3>
-            <canvas id="adminDailyChart" height="200"></canvas>
-          </div>
-          <div class="admin-chart-card">
-            <h3>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
-              </svg>
-              Top 5 来源
-            </h3>
-            <canvas id="adminSceneChart" height="200"></canvas>
-          </div>
-        </div>
-        <!-- 用户管理 -->
-        <div class="admin-pane" id="admin-users">
-          <div class="admin-filter-row">
-            <input class="admin-search-input" id="adminUsersSearch" placeholder="搜索用户名…" autocomplete="off" />
-            <select class="admin-filter-select" id="adminUsersRoleFilter">
-              <option value="">全部角色</option>
-              <option value="admin">管理员</option>
-              <option value="auditor">审核员</option>
-              <option value="user">普通用户</option>
-            </select>
-            <span class="admin-total-hint" id="adminUsersTotal"></span>
-          </div>
-          <div class="admin-table-wrap" id="adminUsersTable"></div>
-          <div class="admin-pagination" id="adminUsersPagination"></div>
-        </div>
-        <!-- 检测记录 -->
-        <div class="admin-pane" id="admin-detections">
-          <div class="admin-filter-row">
-            <input class="admin-search-input" id="adminDetectionsSearch" placeholder="搜索来源 URL…" autocomplete="off" />
-            <select class="admin-filter-select" id="adminDetectionsLabelFilter">
-              <option value="">全部结果</option>
-              <option value="FAKE">AI生成</option>
-              <option value="REAL">真实</option>
-            </select>
-            <span class="admin-total-hint" id="adminDetectionsTotal"></span>
-          </div>
-          <div class="admin-table-wrap" id="adminDetectionsTable"></div>
-          <div class="admin-pagination" id="adminDetectionsPagination"></div>
-        </div>
-        <!-- 误判反馈 -->
-        <div class="admin-pane" id="admin-feedback">
-          <div class="admin-filter-row">
-            <span class="admin-total-hint" id="adminFeedbackTotal"></span>
-            <button class="admin-btn-action" id="btnIntegrateTraining">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
-              </svg>
-              集成到训练集
-            </button>
-            <span id="integrateStatus" class="integrate-status-text"></span>
-          </div>
-          <div class="admin-table-wrap" id="adminFeedbackTable"></div>
-          <div class="admin-pagination" id="adminFeedbackPagination"></div>
-        </div>
+      <div class="search-controls">
+        <input class="search-keyword-input" id="imageSearchKeyword" type="text" placeholder="输入关键词搜索图片…" autocomplete="off" />
+        <select class="search-filter-select" id="imageSearchSize">
+          <option value="">全部尺寸</option>
+          <option value="Small">小图</option>
+          <option value="Medium">中图</option>
+          <option value="Large">大图</option>
+          <option value="Wallpaper">壁纸</option>
+        </select>
+        <select class="search-filter-select" id="imageSearchColor">
+          <option value="">全部颜色</option>
+          <option value="ColorOnly">彩色</option>
+          <option value="Monochrome">黑白</option>
+          <option value="Red">红色</option>
+          <option value="Blue">蓝色</option>
+          <option value="Green">绿色</option>
+        </select>
+        <button class="btn-search-go" id="btnDoImageSearch">搜索</button>
+      </div>
+      <p class="status-msg" id="imageSearchStatus"></p>
+      <div class="image-search-grid" id="imageSearchResults"></div>
+      <div class="search-pagination" id="imageSearchPagination" hidden>
+        <button class="btn-page" id="btnImageSearchPrev" disabled>上一页</button>
+        <span class="page-indicator" id="imageSearchPageLabel">第 1 页</span>
+        <button class="btn-page" id="btnImageSearchNext">下一页</button>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-  <script src="/static/js/app.js?v=4"></script>
+  <script src="/static/js/app.js?v={{ cache_bust }}"></script>
 </body>
 </html>

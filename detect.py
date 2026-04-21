@@ -41,6 +41,11 @@ CLASSES = ["FAKE", "REAL"]
 
 
 def _load_model():
+    if not os.path.isfile(MODEL_PATH):
+        raise FileNotFoundError(
+            f"Model file not found: {MODEL_PATH}\n"
+            f"BASE_DIR={BASE_DIR}, CWD={os.getcwd()}"
+        )
     model = models.resnet50(weights=None)
     model.fc = nn.Linear(model.fc.in_features, len(CLASSES))
     state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
@@ -50,7 +55,11 @@ def _load_model():
     return model
 
 
-_model = _load_model()
+try:
+    _model = _load_model()
+except Exception as _e:
+    print(f"[DETECT] FATAL: Failed to load model: {_e}", flush=True)
+    raise
 
 
 def _compute_model_version() -> str:

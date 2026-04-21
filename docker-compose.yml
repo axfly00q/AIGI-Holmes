@@ -11,6 +11,8 @@ services:
         condition: service_started
     volumes:
       - ./finetuned_fake_real_resnet50.pth:/app/finetuned_fake_real_resnet50.pth:ro
+      - clip_cache:/root/.cache/clip
+      - model_cache:/root/.cache
 
   postgres:
     image: postgres:16-alpine
@@ -38,3 +40,5 @@ services:
 volumes:
   pgdata:
   redisdata:
+  clip_cache:
+  model_cache:

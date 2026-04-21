@@ -1,0 +1,37 @@
+# Minimal dependencies for running the AIGI-Holmes detection app (server.py)
+flask>=3.0
+torch>=2.0
+torchvision>=0.15
+Pillow>=9.0
+requests>=2.28
+
+# Desktop-window launcher (desktop_app.py) — Windows native window via pywebview
+pywebview>=4.0
+
+# === FastAPI backend (backend/) ===
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.27
+pydantic-settings>=2.0
+sqlalchemy[asyncio]>=2.0
+aiosqlite>=0.19
+asyncpg>=0.29
+redis>=5.0
+python-jose[cryptography]>=3.3
+passlib[bcrypt]>=1.7
+bcrypt==4.0.1
+jinja2>=3.1
+reportlab>=4.0
+openpyxl>=3.1
+
+# Text-file image extraction
+PyMuPDF>=1.23
+python-docx>=1.1
+
+# File upload support (required for FastAPI UploadFile)
+python-multipart>=0.0.9
+
+# CLIP content classification (zero-shot)
+ftfy>=6.0
+regex>=2023.0
+-e ./CLIP

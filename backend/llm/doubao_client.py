@@ -90,9 +90,9 @@ class DoubaoClient:
                     if response.status_code != 200:
                         body_text = await response.aread()
                         err_body = body_text.decode(errors="replace")[:300]
-                        logger.error(f"Doubao API error: {response.status_code} — {err_body}")
-                        yield f"API错误 {response.status_code}：请检查 .env 中的 DOUBAO_MODEL 是否为有效的 ARK 接入点ID（格式如 ep-YYYYMMDD-xxxxx）"
-                        return
+                        logger.error(f"Doubao API HTTP {response.status_code}: {err_body}")
+                        # 大量空行来确保这个错误被识别出来
+                        raise Exception(f"API error {response.status_code}: {err_body[:100]}")
 
                     async for line in response.aiter_lines():
                         if not line.strip():
@@ -118,9 +118,15 @@ class DoubaoClient:
         except asyncio.TimeoutError:
             logger.error("Doubao API timeout")
             yield "❌ 请求超时，请重试"
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Doubao API HTTP error {e.response.status_code}: {e.response.text[:500]}")
+            yield f"❌ API错误: {e.response.status_code}"
+        except httpx.RequestError as e:
+            logger.error(f"Doubao API request error: {e}")
+            yield f"❌ 网络错误: {str(e)[:100]}"
         except Exception as e:
-            logger.error(f"Doubao API exception: {e}")
-            yield f"❌ 分析失败：{str(e)}"
+            logger.error(f"Doubao API exception: {type(e).__name__}: {e}")
+            yield f"❌ 分析失败：{str(e)[:150]}"
 
     async def validate_api_key(self) -> bool:
         """

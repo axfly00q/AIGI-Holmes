@@ -33,6 +33,8 @@ from detect import (
 )
 from detect_text import extract_images_from_file
 from backend.clip_classify import classify_image, classify_text_image_consistency
+from backend.analyzers import analyze_seal, analyze_frequency, analyze_edge, analyze_face
+from backend.analyzers.composite import compute_overall
 
 router = APIRouter(prefix="/api", tags=["detection"])
 
@@ -77,6 +79,10 @@ class UrlResultItem(BaseModel):
     thumbnail: str
     category: str | None = None
     consistency: dict | None = None
+    seal_score: float | None = None
+    frequency_score: float | None = None
+    edge_score: float | None = None
+    face_score: float | None = None
 
 
 class DetectUrlResponse(BaseModel):
@@ -86,6 +92,7 @@ class DetectUrlResponse(BaseModel):
     page_summary: str | None = None
     overall_score: float | None = None
     dimensions: dict | None = None
+    article_text: str | None = None
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
@@ -184,6 +191,10 @@ async def api_detect_url(
 
     results: list[dict] = []
     consistency_scores: list[float] = []
+    seal_scores: list[float] = []
+    frequency_scores: list[float] = []
+    edge_scores: list[float] = []
+    face_scores: list[float] = []
     category_counts: dict[str, int] = {}
     total_confidence: float = 0
     fake_count: int = 0
@@ -193,27 +204,56 @@ async def api_detect_url(
         if img is None:
             continue
 
-        det = await _run_detect(img)
-
-        # CLIP classification
         loop = asyncio.get_running_loop()
-        category = await loop.run_in_executor(None, classify_image, img)
-        category_counts[category] = category_counts.get(category, 0) + 1
+
+        # Run detection + CLIP + thumbnail in parallel
+        det_task = _run_detect(img)
+        cat_task = loop.run_in_executor(None, classify_image, img)
+
+        def _build_thumb(pil):
+            buf = io.BytesIO()
+            t = pil.copy()
+            t.thumbnail((400, 400))
+            t.save(buf, format="JPEG", quality=80)
+            return base64.b64encode(buf.getvalue()).decode()
+
+        thumb_task = loop.run_in_executor(None, _build_thumb, img)
+
+        # Run 4 new analyzers in parallel
+        seal_task = analyze_seal(img)
+        freq_task = analyze_frequency(img)
+        edge_task = analyze_edge(img)
+        face_task = analyze_face(img)
 
         # Text-image consistency
         consistency = None
         if article_text:
-            consistency = await loop.run_in_executor(
+            cons_task = loop.run_in_executor(
                 None, classify_text_image_consistency, img, page_summary or article_text[:200]
             )
+            det, category, b64, seal_result, freq_result, edge_result, face_result, consistency = (
+                await asyncio.gather(
+                    det_task, cat_task, thumb_task,
+                    seal_task, freq_task, edge_task, face_task,
+                    cons_task,
+                )
+            )
             consistency_scores.append(consistency["score"])
+        else:
+            det, category, b64, seal_result, freq_result, edge_result, face_result = (
+                await asyncio.gather(
+                    det_task, cat_task, thumb_task,
+                    seal_task, freq_task, edge_task, face_task,
+                )
+            )
 
-        # thumbnail
-        buf = io.BytesIO()
-        thumb = img.copy()
-        thumb.thumbnail((400, 400))
-        thumb.save(buf, format="JPEG", quality=80)
-        b64 = base64.b64encode(buf.getvalue()).decode()
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+        # Collect per-image analyser scores
+        seal_scores.append(seal_result["score"])
+        frequency_scores.append(freq_result["score"])
+        edge_scores.append(edge_result["score"])
+        face_scores.append(face_result["score"])
 
         item = {
             "index": i,
@@ -226,6 +266,10 @@ async def api_detect_url(
             "thumbnail": f"data:image/jpeg;base64,{b64}",
             "category": category,
             "consistency": consistency,
+            "seal_score": round(seal_result["score"], 1),
+            "frequency_score": round(freq_result["score"], 1),
+            "edge_score": round(edge_result["score"], 1),
+            "face_score": round(face_result["score"], 1),
         }
         results.append(item)
         total_confidence += det["confidence"]
@@ -245,26 +289,43 @@ async def api_detect_url(
     avg_confidence = round(total_confidence / n, 1) if n else 0
     avg_consistency = round(sum(consistency_scores) / len(consistency_scores), 1) if consistency_scores else 50
     real_ratio = round((n - fake_count) / n * 100, 1) if n else 0
+    avg_seal = round(sum(seal_scores) / len(seal_scores), 1) if seal_scores else 50.0
+    avg_frequency = round(sum(frequency_scores) / len(frequency_scores), 1) if frequency_scores else 50.0
+    avg_edge = round(sum(edge_scores) / len(edge_scores), 1) if edge_scores else 50.0
+
+    # New 6-dimension composite score
+    composite = compute_overall(
+        authenticity=real_ratio,
+        confidence=avg_confidence,
+        consistency=avg_consistency,
+        seal=avg_seal,
+        frequency=avg_frequency,
+        edge=avg_edge,
+    )
 
     dimensions = {
         "authenticity": real_ratio,
         "confidence": avg_confidence,
         "consistency": avg_consistency,
+        "seal": avg_seal,
+        "frequency": avg_frequency,
+        "edge": avg_edge,
         "image_count": n,
         "fake_count": fake_count,
         "real_count": n - fake_count,
         "categories": category_counts,
+        "verdict": composite["verdict"],
+        "level": composite["level"],
     }
-
-    overall_score = round((real_ratio * 0.4 + avg_confidence * 0.3 + avg_consistency * 0.3), 1)
 
     return {
         "count": n,
         "results": results,
         "page_title": page_title,
         "page_summary": page_summary,
-        "overall_score": overall_score,
+        "overall_score": composite["overall_score"],
         "dimensions": dimensions,
+        "article_text": article_text[:10000] if article_text else None,
     }
 
 
@@ -403,43 +464,39 @@ async def _process_batch_run(
             })
             continue
 
-    # Push start event
+    # ── 逐一处理：每张图检测完立即推送结果 ──────────────────────────────
     await queue.put({"type": "start", "total": len(items)})
 
-    # Process each image
+    loop = asyncio.get_running_loop()
+
+    def _build_thumb(pil):
+        buf = io.BytesIO()
+        t = pil.copy()
+        t.thumbnail((400, 400))
+        t.save(buf, format="JPEG", quality=80)
+        return base64.b64encode(buf.getvalue()).decode()
+
     result_count = 0
     for i, item in enumerate(items):
-        await queue.put({
-            "type": "item",
-            "index": i,
-            "filename": item["filename"],
-            "source": item["source"],
-        })
-
-        # Cache check
+        # 先查缓存
         cached = await get_cached_result(item["raw"])
         if cached:
             result = cached
         else:
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(
-                None, partial(detect_image, item["image"], with_cam=False)
-            )
+            # 单张推理（用 detect_batch 包一张，避免引入新接口）
+            batch_out = await loop.run_in_executor(None, detect_batch, [item["image"]])
+            result = batch_out[0]
             cache_data = {k: v for k, v in result.items() if k != "cam_image"}
             await set_cached_result(item["raw"], cache_data)
 
-        # CLIP content classification (runs in executor to avoid blocking)
-        loop = asyncio.get_running_loop()
-        category = await loop.run_in_executor(None, classify_image, item["image"])
-
-        # Build thumbnail
-        thumb_buf = io.BytesIO()
-        thumb = item["image"].copy()
-        thumb.thumbnail((400, 400))
-        thumb.save(thumb_buf, format="JPEG", quality=80)
-        b64 = base64.b64encode(thumb_buf.getvalue()).decode()
+        # CLIP 分类 + 缩略图并发执行（只针对当前这张）
+        category, thumbnail = await asyncio.gather(
+            loop.run_in_executor(None, classify_image, item["image"]),
+            loop.run_in_executor(None, _build_thumb, item["image"]),
+        )
 
         result_count += 1
+        # 立即推送当前图片的结果，前端马上渲染该卡片
         await queue.put({
             "type": "result",
             "index": i,
@@ -450,10 +507,12 @@ async def _process_batch_run(
                 "label_zh": result["label_zh"],
                 "confidence": round(result["confidence"], 1),
                 "probs": [{**p, "score": round(p["score"], 1)} for p in result["probs"]],
-                "thumbnail": f"data:image/jpeg;base64,{b64}",
+                "thumbnail": f"data:image/jpeg;base64,{thumbnail}",
                 "category": category,
             },
         })
+        # 让事件循环有机会把 WS 消息发出去，再处理下一张
+        await asyncio.sleep(0)
 
     await queue.put({"type": "complete", "count": result_count})
     # job_store 的 10 分钟定时器会自动清理，这里不提前删除
@@ -532,14 +591,9 @@ async def api_analyze_detection(
         "probs": json.loads(record.probs_json) if record.probs_json else [],
     }
 
-    # 初始化豆包客户端
     settings = get_settings()
-    if not settings.DOUBAO_API_KEY:
-        raise ImageFormatError("豆包AI服务未配置")
-
-    client = DoubaoClient(settings.DOUBAO_API_KEY, model=settings.DOUBAO_MODEL)
-
-    # 获取或创建会话
+    
+    # ── 获取或创建会话 ──────────────────────────────────────────────────
     if not session_id:
         import time
         session_id = "session_" + str(detection_id) + "_" + str(int(time.time() * 1000))
@@ -549,41 +603,119 @@ async def api_analyze_detection(
     async def event_generator():
         """SSE事件生成器，支持多轮对话"""
         full_response = ""
+        
+        # 检查豆包 API 是否可用
+        use_local_analysis = not settings.DOUBAO_API_KEY
+        doubao_failed = False
+        
         try:
-            # 获取该检测的历史对话，用于上下文
-            conversation_history = None
-            history = session.get_history_for_detection(detection_id)
-            if history:
-                # 转换为豆包API需要的消息格式
-                conversation_history = []
-                for entry in history:
-                    conversation_history.append({
-                        "role": "user",
-                        "content": entry["question"]
-                    })
-                    conversation_history.append({
-                        "role": "assistant",
-                        "content": entry["answer"]
-                    })
+            # ── 如果有 API 密钥，使用豆包 AI ──────────────────────────────
+            if not use_local_analysis:
+                try:
+                    client = DoubaoClient(settings.DOUBAO_API_KEY, model=settings.DOUBAO_MODEL)
+                    
+                    # 获取该检测的历史对话，用于上下文
+                    conversation_history = None
+                    history = session.get_history_for_detection(detection_id)
+                    if history:
+                        conversation_history = []
+                        for entry in history:
+                            conversation_history.append({
+                                "role": "user",
+                                "content": entry["question"]
+                            })
+                            conversation_history.append({
+                                "role": "assistant",
+                                "content": entry["answer"]
+                            })
 
-            async for chunk in client.stream_analysis(
-                user_question=question,
-                detection_result=record_dict,
-                image_info=f"来源URL: {record.image_url}" if record.image_url else "",
-                conversation_history=conversation_history,
-            ):
-                if chunk == "[DONE]":
-                    # 添加到会话历史
-                    session.add_entry(detection_id, question, full_response)
-                    yield f"data: [DONE]\n\n"
+                    has_content = False
+                    doubao_stream_error = None
+                    async for chunk in client.stream_analysis(
+                        user_question=question,
+                        detection_result=record_dict,
+                        image_info=f"来源URL: {record.image_url}" if record.image_url else "",
+                        conversation_history=conversation_history,
+                    ):
+                        has_content = True
+                        # 检查是否收到错误消息（来自 doubao_client 的错误处理）
+                        if chunk.startswith("❌"):
+                            doubao_stream_error = chunk
+                            # 错误消息也应该被发送到客户端
+                            yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
+                        elif chunk == "[DONE]":
+                            if not doubao_stream_error:  # 只有在没有错误的情况下才保存
+                                session.add_entry(detection_id, question, full_response)
+                            yield f"data: [DONE]\n\n"
+                            if doubao_stream_error:  # 如果有错误，触发降级
+                                doubao_failed = True
+                                use_local_analysis = True
+                            return
+                        else:
+                            full_response += chunk
+                            yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
+                    
+                    # 如果没有收到任何内容，说明 Doubao 可能出现问题
+                    if not has_content:
+                        doubao_failed = True
+                        import logging
+                        logging.warning("Doubao returned no content, falling back to local analysis")
+                        use_local_analysis = True
+                
+                except Exception as e:
+                    doubao_failed = True
+                    import logging
+                    logging.error(f"Doubao API failed: {type(e).__name__}: {e}")
+                    use_local_analysis = True
+            
+            # ── 如果没有 API 密钥或 Doubao 失败，使用本地分析 ────────────────────────
+            if use_local_analysis:
+                if doubao_failed:
+                    # Doubao 失败的提示
+                    fallback_msg = "已自动降级到本地分析。\n\n"
+                    full_response += fallback_msg
+                    yield f"data: {json.dumps({'chunk': fallback_msg}, ensure_ascii=False)}\n\n"
+                
+                label = record_dict.get("label", "UNKNOWN")
+                confidence = record_dict.get("confidence", 0)
+                probs = record_dict.get("probs", [])
+                
+                # 生成基于检测结果的本地分析
+                if label == "FAKE":
+                    analysis = f"根据 AI 检测模型分析，该图片被判定为 AI 生成，置信度 {confidence}%。\n\n"
+                    if confidence >= 90:
+                        analysis += "该图片具有非常强的 AI 生成特征，可能来自 Diffusion Model 或 GAN 生成。"
+                    elif confidence >= 75:
+                        analysis += "该图片显示出较强的 AI 生成特征，常见于图像合成或深度伪造。"
+                    elif confidence >= 60:
+                        analysis += "该图片具有可疑的 AI 生成特征，建议进一步核实。"
+                    else:
+                        analysis += "该图片可能由 AI 生成，但置信度相对较低，建议结合其他证据判断。"
                 else:
+                    analysis = f"根据 AI 检测模型分析，该图片被判定为真实照片，置信度 {confidence}%。\n\n"
+                    if confidence >= 90:
+                        analysis += "该图片表现出真实照片的典型特征，未发现明显 AI 生成迹象。"
+                    elif confidence >= 75:
+                        analysis += "该图片呈现真实照片的特征，背景、光影和细节符合常规成像规律。"
+                    elif confidence >= 60:
+                        analysis += "该图片倾向于真实拍摄，但存在少量不确定因素，建议结合其他信息核实。"
+                    else:
+                        analysis += "该图片可能为真实照片，但模型置信度较低，建议进一步确认。"
+                
+                # 流式输出本地分析（模拟打字效果）
+                chunk_size = 50
+                for i in range(0, len(analysis), chunk_size):
+                    chunk = analysis[i:i+chunk_size]
                     full_response += chunk
-                    # SSE格式：data: <content>\n\n
                     yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
+                
+                session.add_entry(detection_id, question, full_response)
+                yield f"data: [DONE]\n\n"
+        
         except Exception as e:
             import logging
-            logging.error(f"Stream analysis error: {e}")
-            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+            logging.error(f"Stream analysis error: {type(e).__name__}: {e}")
+            yield f"data: {json.dumps({'error': '分析处理出错，请重试'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -737,19 +869,37 @@ class TranslateRequest(BaseModel):
 @router.post("/translate")
 async def api_translate(body: TranslateRequest):
     """
-    将文本翻译为中文（使用豆包AI）。
+    将文本翻译为中文。
+    优先使用豆包AI流式翻译；未配置API密钥时降级为 MyMemory 免费服务。
     """
     from fastapi.responses import StreamingResponse
     from backend.config import get_settings
     import httpx
 
     settings = get_settings()
-    if not settings.DOUBAO_API_KEY:
-        raise ImageFormatError("豆包AI服务未配置")
-
     text = body.text.strip()
     if not text:
         raise ImageFormatError("文本不能为空")
+
+    # ── Fallback: MyMemory 免费翻译（无需 API 密钥）────────────────────────
+    if not settings.DOUBAO_API_KEY:
+        async def mymemory_gen():
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    r = await client.get(
+                        "https://api.mymemory.translated.net/get",
+                        params={"q": text[:500], "langpair": "en|zh-CN"},
+                    )
+                    data = r.json()
+                    translated = data.get("responseData", {}).get("translatedText", "")
+                    if not translated or str(data.get("responseStatus")) != "200":
+                        yield f"data: {json.dumps({'error': '翻译服务暂不可用'}, ensure_ascii=False)}\n\n"
+                        return
+                    yield f"data: {json.dumps({'chunk': translated}, ensure_ascii=False)}\n\n"
+                    yield "data: [DONE]\n\n"
+            except Exception as exc:
+                yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(mymemory_gen(), media_type="text/event-stream")
 
     messages = [
         {
