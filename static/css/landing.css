@@ -1,0 +1,448 @@
+/* ================================================================
+   AIGI-Holmes  Landing Page — Video Background + Auth Panel
+   深蓝/青色科技感  |  毛玻璃面板  |  Tab 切换登录/注册
+   ================================================================ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --blue-950: #0a1628;
+  --blue-900: #0f172a;
+  --blue-800: #1e293b;
+  --blue-700: #334155;
+  --cyan-400: #38bdf8;
+  --cyan-300: #7dd3fc;
+  --cyan-500: #0ea5e9;
+  --white:    #f8fafc;
+  --muted:    #94a3b8;
+  --danger:   #f87171;
+  --success:  #34d399;
+  --panel-bg: rgba(10, 22, 40, 0.65);
+  --panel-border: rgba(56, 189, 248, 0.18);
+  --input-bg: rgba(15, 23, 42, 0.7);
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--blue-950);
+}
+
+/* ── 视频背景 ─────────────────────────────── */
+.lp-video-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.lp-video-bg video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* 深色遮罩 */
+.lp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    135deg,
+    rgba(10, 22, 40, 0.78) 0%,
+    rgba(10, 22, 40, 0.55) 50%,
+    rgba(10, 22, 40, 0.82) 100%
+  );
+}
+
+/* ── 主布局 ───────────────────────────────── */
+.lp-layout {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: stretch;
+  height: 100vh;
+}
+
+/* ── 左侧 Hero 区域 ──────────────────────── */
+.lp-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 6vw;
+  min-width: 0;
+}
+
+.lp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan-400);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 28px;
+  width: fit-content;
+}
+
+.lp-badge::before {
+  content: '';
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan-400);
+  box-shadow: 0 0 8px var(--cyan-400);
+  animation: lp-pulse 2s ease-in-out infinite;
+}
+
+@keyframes lp-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+
+.lp-title {
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  font-weight: 800;
+  color: var(--white);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-bottom: 20px;
+}
+
+.lp-title .accent {
+  background: linear-gradient(135deg, var(--cyan-400), var(--cyan-300));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.lp-slogan {
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 480px;
+  margin-bottom: 48px;
+}
+
+.lp-features {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lp-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.lp-feature-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan-400);
+  flex-shrink: 0;
+}
+
+/* ── 右侧面板 ─────────────────────────────── */
+.lp-panel-wrap {
+  width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 40px 40px 20px;
+}
+
+.lp-panel {
+  width: 100%;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(56, 189, 248, 0.06) inset,
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  overflow: hidden;
+}
+
+/* 面板顶部光条 */
+.lp-panel::before {
+  content: '';
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan-400), var(--cyan-300), transparent);
+}
+
+.lp-panel-inner {
+  padding: 32px 36px 36px;
+}
+
+/* 面板品牌 */
+.lp-panel-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.lp-panel-brand .brand-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--cyan-500), var(--cyan-300));
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue-900);
+  flex-shrink: 0;
+}
+
+.lp-panel-brand .brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--white);
+}
+
+.lp-panel-brand .brand-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* Tab 切换 */
+.lp-tabs {
+  display: flex;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  margin-bottom: 28px;
+}
+
+.lp-tab-btn {
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.22s ease;
+}
+
+.lp-tab-btn.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(14, 165, 233, 0.15));
+  color: var(--cyan-400);
+  box-shadow: 0 1px 8px rgba(56, 189, 248, 0.15);
+}
+
+.lp-tab-btn:hover:not(.active) {
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* 表单容器 */
+.lp-form-wrap {
+  position: relative;
+}
+
+.lp-form {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+  animation: lp-fadein 0.28s ease;
+}
+
+.lp-form.visible {
+  display: flex;
+}
+
+@keyframes lp-fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 输入组 */
+.lp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lp-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lp-field input {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--input-bg);
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.lp-field input::placeholder {
+  color: #475569;
+}
+
+.lp-field input:focus {
+  border-color: var(--cyan-400);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+/* 提交按钮 */
+.lp-submit-btn {
+  width: 100%;
+  padding: 12px 0;
+  margin-top: 4px;
+  background: linear-gradient(135deg, var(--cyan-500) 0%, var(--cyan-400) 100%);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--blue-900);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.35);
+  letter-spacing: 0.02em;
+}
+
+.lp-submit-btn:hover {
+  opacity: 0.92;
+  box-shadow: 0 6px 28px rgba(56, 189, 248, 0.5);
+}
+
+.lp-submit-btn:active {
+  transform: scale(0.98);
+}
+
+.lp-submit-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 错误 / 成功消息 */
+.lp-msg {
+  display: none;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: -4px;
+}
+
+.lp-msg.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #fca5a5;
+}
+
+.lp-msg.success {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  color: #6ee7b7;
+}
+
+.lp-msg-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* 面板底部提示 */
+.lp-panel-footer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(56, 189, 248, 0.08);
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── 过渡淡出 ────────────────────────────── */
+#landingPage {
+  transition: opacity 0.55s ease;
+}
+
+#landingPage.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── 加载旋转 ─────────────────────────────── */
+@keyframes lp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lp-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(10, 22, 40, 0.4);
+  border-top-color: var(--blue-900);
+  border-radius: 50%;
+  animation: lp-spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* ── 响应式 ───────────────────────────────── */
+@media (max-width: 820px) {
+  .lp-layout {
+    flex-direction: column;
+    overflow-y: auto;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  html, body { overflow: auto; }
+
+  .lp-hero {
+    padding: 60px 6vw 40px;
+    align-items: center;
+    text-align: center;
+  }
+
+  .lp-slogan { max-width: 100%; }
+  .lp-badge  { margin: 0 auto 24px; }
+  .lp-features { display: none; }
+
+  .lp-panel-wrap {
+    width: 100%;
+    padding: 0 20px 60px;
+  }
+}

@@ -1,6 +1,15 @@
 /* global */
 'use strict';
 
+/* ── 登录守卫：未登录或会话失效则跳回欢迎页 ── */
+(function() {
+  var token = localStorage.getItem('aigi_token');
+  var session = sessionStorage.getItem('aigi_session_active');
+  if (!token || !session) {
+    window.location.replace('/');
+  }
+})();
+
 function $(id) { return document.getElementById(id); }
 function setStatus(el, msg, type) {
   el.textContent = msg;
@@ -21,13 +30,14 @@ function saveAuth(tokens, username, role) {
   localStorage.setItem(AUTH_KEY, tokens.access_token);
   if (tokens.refresh_token) localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
   localStorage.setItem(AUTH_USER_KEY, JSON.stringify({ username, role }));
+  sessionStorage.setItem('aigi_session_active', '1');
   updateAuthBar();
 }
 function clearAuth() {
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(AUTH_REFRESH_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
-  updateAuthBar();
+  window.location.replace('/');
 }
 function updateAuthBar() {
   const raw = localStorage.getItem(AUTH_USER_KEY);
@@ -451,23 +461,34 @@ let lastDetectionLabel = '';  // 'FAKE' or 'REAL'
 
 function _escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';}
 
-function buildGalleryCard(it){
+function buildGalleryCard(it, showSearchBtn=true){
   const c=it.label==='REAL'?'real':'fake';
   const catBadge = it.category ? `<span class="gallery-card__cat">${it.category}</span>` : '';
   const consistencyHtml = it.consistency ? `<div class="gallery-card__consistency"><span class="consistency-dot" style="background:${it.consistency.score>=60?'#22c55e':it.consistency.score>=40?'#f59e0b':'#ef4444'}"></span><span>${it.consistency.assessment} ${Math.round(it.consistency.score)}%</span></div>` : '';
+  // 媒体来源 Logo 徽章（Phase 3 新增）
+  const logoHtml = it.logo_detected ? `<div class="gallery-card__logo-signal"><span class="logo-signal-icon">🏷️</span><span class="logo-signal-text">${_escHtml(it.logo_detected)}</span><span class="logo-signal-conf">${Math.round(it.logo_confidence||0)}%</span></div>` : '';
+  // 印章分 + 人脸分 小芯片（Phase 1 & 2A 新增）
+  const sealScore = it.seal_score != null ? Math.round(it.seal_score) : null;
+  const faceScore = it.face_score != null ? Math.round(it.face_score) : null;
+  const sealHtml = sealScore != null ? `<span class="dim-chip dim-chip--seal" style="color:${sealScore>=70?'#22c55e':sealScore>=40?'#f59e0b':'#ef4444'}">章 ${sealScore}%</span>` : '';
+  const faceHtml = faceScore != null && faceScore !== 50 ? `<span class="dim-chip dim-chip--face" style="color:${faceScore>=70?'#22c55e':faceScore>=40?'#f59e0b':'#ef4444'}">脸 ${faceScore}%</span>` : '';
+  const dimChipsHtml = (sealHtml||faceHtml) ? `<div class="gallery-card__dim-chips">${sealHtml}${faceHtml}</div>` : '';
   const mb=(it.probs||[]).map(p=>{
     const pc=p.label==='REAL'?'real':'fake';
     const s=Math.round(p.score);
     return `<div class="mini-row"><span class="mini-label">${p.label_zh}</span><div class="mini-track"><div class="mini-fill ${pc}" style="width:0%" data-score="${s}"></div></div><span class="mini-score">${s}%</span></div>`;
   }).join('');
   // 点击按钮时调用 _searchFromCard(this) 来读取 data-category
-  const searchBtn = `<button class="gallery-card__search-similar" data-category="${_escHtml(it.category || '')}" onclick="_searchFromCard(this)" title="用文章标题和图片类别在网络查找类似图片">查找类似图片</button>`;
-  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}<div class="gallery-card__mini-bars">${mb}</div>${searchBtn}</div></div>`;
+  const searchBtn = showSearchBtn ? `<button class="gallery-card__search-similar" data-category="${_escHtml(it.category || '')}" onclick="_searchFromCard(this)" title="用文章标题和图片类别在网络查找类似图片">查找类似图片</button>` : '';
+  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}${logoHtml}${dimChipsHtml}<div class="gallery-card__mini-bars">${mb}</div>${searchBtn}</div></div>`;
 }
 function buildReportRow(it){
   const c=it.label==='REAL'?'real':'fake';
   const conText = it.consistency ? ` · 图文一致性: ${it.consistency.assessment}(${Math.round(it.consistency.score)}%)` : '';
-  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.label_zh)}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}</span></div>`;
+  const logoText = it.logo_detected ? ` · 来源: ${_escHtml(it.logo_detected)}(${Math.round(it.logo_confidence||0)}%)` : '';
+  const sealText = it.seal_score != null ? ` · 章: ${Math.round(it.seal_score)}%` : '';
+  const faceText = (it.face_score != null && it.face_score !== 50) ? ` · 脸: ${Math.round(it.face_score)}%` : '';
+  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.label_zh)}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}${logoText}${sealText}${faceText}</span></div>`;
 }
 
 async function detectUrlText() {
@@ -609,6 +630,7 @@ function renderUrlAnalysis(d) {
     { label: '边界一致', value: dim.edge || 50 },
     { label: '图文一致', value: dim.consistency || 50 },
     { label: '公章完整', value: dim.seal || 50 },
+    { label: '人脸真实', value: dim.face || 50 },
   ];
   const dimBarsEl = $('urlDimBars');
   if (dimBarsEl) {
@@ -619,6 +641,18 @@ function renderUrlAnalysis(d) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       dimBarsEl.querySelectorAll('.url-dim-fill').forEach(el => el.style.width = el.dataset.score + '%');
     }));
+  }
+  // 媒体来源 Logo 汇总（Phase 3 新增）
+  const _logosDetected = (d.results||[]).filter(r=>r.logo_detected).map(r=>r.logo_detected);
+  const _logoSummaryEl = $('urlLogoSignal');
+  if (_logoSummaryEl) {
+    if (_logosDetected.length > 0) {
+      const _uniq = [...new Set(_logosDetected)];
+      _logoSummaryEl.innerHTML = `<span class="logo-signal-icon">🏷️</span> 检测到媒体来源：${_uniq.map(n=>`<strong>${_escHtml(n)}</strong>`).join('、')}`;
+      _logoSummaryEl.hidden = false;
+    } else {
+      _logoSummaryEl.hidden = true;
+    }
   }
 
   // Consistency bar
@@ -638,8 +672,14 @@ function renderUrlAnalysis(d) {
   // Report dimensions summary
   const dimSummary = $('reportDimensions');
   const verdictText = dim.verdict || (score>=70?'该新闻页面图片以真实内容为主，图文一致性较好，可信度较高。':score>=40?'该新闻页面存在部分可疑图片，建议进一步核实。':'该新闻页面多张图片被判定为AI生成，建议谨慎引用，必要时核实图片来源。');
+  const _logoSignalHtml = (() => {
+    const _logos = (d.results||[]).filter(r=>r.logo_detected).map(r=>r.logo_detected);
+    if (_logos.length === 0) return '';
+    const _uniq = [...new Set(_logos)];
+    return `<div class="report-logo-signal"><span class="logo-signal-icon">🏷️</span> 媒体来源信号：${_uniq.map(n=>`<strong>${_escHtml(n)}</strong>`).join('、')}</div>`;
+  })();
   dimSummary.innerHTML = `
-    <div class="report-dim-grid report-dim-grid--7">
+    <div class="report-dim-grid report-dim-grid--8">
       <div class="report-dim-item">
         <span class="report-dim-label">综合评分</span>
         <span class="report-dim-value" style="color:${score>=70?'#22c55e':score>=40?'#f59e0b':'#ef4444'}">${Math.round(score)}</span>
@@ -661,6 +701,10 @@ function renderUrlAnalysis(d) {
         <span class="report-dim-value">${Math.round(dim.seal||50)}%</span>
       </div>
       <div class="report-dim-item">
+        <span class="report-dim-label">人脸真实性</span>
+        <span class="report-dim-value" style="color:${(dim.face||50)>=70?'#22c55e':(dim.face||50)>=40?'#f59e0b':'#ef4444'}">${Math.round(dim.face||50)}%</span>
+      </div>
+      <div class="report-dim-item">
         <span class="report-dim-label">频率自然性</span>
         <span class="report-dim-value">${Math.round(dim.frequency||50)}%</span>
       </div>
@@ -669,6 +713,7 @@ function renderUrlAnalysis(d) {
         <span class="report-dim-value">${Math.round(dim.edge||50)}%</span>
       </div>
     </div>
+    ${_logoSignalHtml}
     <div class="report-conclusion">
       <strong>检测结论：</strong>${verdictText}
     </div>
@@ -1101,7 +1146,7 @@ async function handleBatchFiles(fileList){
       $('detectProgressBar').style.width=pct+'%';
 
       const r=d.result;
-      const cardHtml=buildGalleryCard({...r, index:d.index+_batchIndexOffset+1, url:d.filename});
+      const cardHtml=buildGalleryCard({...r, index:d.index+_batchIndexOffset+1, url:d.filename}, false);
 
       if(d.source){
         let group=sourceGroups[d.source];
@@ -1363,14 +1408,14 @@ function _renderPagination(container, currentPage, total, pageSize, fnName) {
   let start = Math.max(1, currentPage - 2);
   let end   = Math.min(totalPages, start + MAX_VIS - 1);
   if (end - start < MAX_VIS - 1) start = Math.max(1, end - MAX_VIS + 1);
-  let btns = `<button class="page-btn" onclick="${fnName}(${Math.max(1,currentPage-1)})" ${currentPage===1?'disabled':''}>\u2039 上页</button>`;
+  let btns = `<button class="page-btn page-btn--nav" onclick="${fnName}(${Math.max(1,currentPage-1)})" ${currentPage===1?'disabled':''}>\u2039 上页</button>`;
   if (start > 1) btns += `<button class="page-btn" onclick="${fnName}(1)">1</button>`;
   if (start > 2) btns += '<span class="page-ellipsis">…</span>';
   for (let i = start; i <= end; i++)
     btns += `<button class="page-btn ${i===currentPage?'active':''}" onclick="${fnName}(${i})">${i}</button>`;
   if (end < totalPages - 1) btns += '<span class="page-ellipsis">…</span>';
   if (end < totalPages) btns += `<button class="page-btn" onclick="${fnName}(${totalPages})">${totalPages}</button>`;
-  btns += `<button class="page-btn" onclick="${fnName}(${Math.min(totalPages,currentPage+1)})" ${currentPage===totalPages?'disabled':''}> 下页 ›</button>`;
+  btns += `<button class="page-btn page-btn--nav" onclick="${fnName}(${Math.min(totalPages,currentPage+1)})" ${currentPage===totalPages?'disabled':''}> 下页 ›</button>`;
   container.innerHTML = `<div class="pagination-wrapper"><span class="pagination-info">第 ${currentPage} 页，共 ${totalPages} 页</span><div class="pagination-btns">${btns}</div></div>`;
 }
 
@@ -1459,9 +1504,9 @@ async function loadAdminDashboard() {
       if (el) {
         const max = Math.max(...data.daily_stats.map(d => d.count), 1);
         el.innerHTML = data.daily_stats.map(d => {
-          const pct = Math.max(4, Math.round(d.count / max * 100));
+          const barH = Math.max(3, Math.round(d.count / max * 110));
           const day = d.date ? d.date.slice(5) : '';
-          return `<div class="admin-bar-col"><span class="admin-bar-value">${d.count}</span><div class="admin-bar-fill" style="height:${pct}%"></div><span class="admin-bar-label">${day}</span></div>`;
+          return `<div class="admin-bar-col"><span class="admin-bar-value">${d.count}</span><div class="admin-bar-fill" style="height:${barH}px"></div><span class="admin-bar-label">${day}</span></div>`;
         }).join('');
       }
     }
@@ -2399,7 +2444,7 @@ async function loadMyRecords(page) {
    Floating Ball & FAQ
    ============================================================ */
 let _faqData = [];
-let _faqPage = 0;
+let _currentFaqItems = [];
 const _FAQ_PER_PAGE = 5;
 
 async function loadFaqData() {
@@ -2415,34 +2460,190 @@ async function loadFaqData() {
 function renderFaqList() {
   const list = $('faqList');
   if (!list) return;
-  const start = (_faqPage * _FAQ_PER_PAGE) % Math.max(_faqData.length, 1);
-  const items = [];
-  for (let i = 0; i < _FAQ_PER_PAGE && i < _faqData.length; i++) {
-    items.push(_faqData[(start + i) % _faqData.length]);
-  }
-  list.innerHTML = items.map((item, idx) =>
+  if (_faqData.length === 0) return;
+  // Random pick N without replacement
+  const pool = [..._faqData].sort(() => Math.random() - 0.5);
+  _currentFaqItems = pool.slice(0, Math.min(_FAQ_PER_PAGE, _faqData.length));
+  list.innerHTML = _currentFaqItems.map((item, idx) =>
     `<button class="faq-item" data-faq-idx="${idx}">${_escHtml(item.q)}</button>`
   ).join('');
-  // Show faq list, hide answer
-  $('faqList').hidden = false;
+  list.hidden = false;
   const ans = $('faqAnswer');
   if (ans) ans.hidden = true;
 }
 
-// Floating ball toggle
-if ($('floatingBall')) {
-  $('floatingBall').addEventListener('click', async () => {
-    const panel = $('floatingPanel');
-    if (!panel) return;
+// ── Draggable Floating Ball ──────────────────────────────────
+(function initDraggableBall() {
+  const ball = $('floatingBall');
+  const panel = $('floatingPanel');
+  if (!ball || !panel) return;
+
+  const avatarImg = ball.querySelector('img');
+  let isDragging = false;
+  let hasMoved = false;
+  let pointerOffsetX = 0, pointerOffsetY = 0;
+  let ballX = 0, ballY = 0;
+  let prevDragX = 0, prevDragY = 0;
+  const DRAG_THRESHOLD = 6;
+  const IMG_MAX_OFFSET = 14; // px image can shift from center
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
+
+  // Convert CSS bottom/right to top/left on first drag
+  function ensureAbsoluteCoords() {
+    if (ball.dataset.absInit === '1') return;
+    const rect = ball.getBoundingClientRect();
+    ballX = rect.left;
+    ballY = rect.top;
+    ball.style.bottom = 'auto';
+    ball.style.right = 'auto';
+    ball.style.left = ballX + 'px';
+    ball.style.top = ballY + 'px';
+    ball.dataset.absInit = '1';
+  }
+
+  function clampBall(x, y) {
+    return {
+      x: Math.max(0, Math.min(x, window.innerWidth - ball.offsetWidth)),
+      y: Math.max(0, Math.min(y, window.innerHeight - ball.offsetHeight))
+    };
+  }
+
+  // Shift the character image toward drag direction
+  function applyImgOffset(curX, curY) {
+    if (!avatarImg) return;
+    const dx = clamp((curX - prevDragX) * 1.8, -IMG_MAX_OFFSET, IMG_MAX_OFFSET);
+    const dy = clamp((curY - prevDragY) * 1.8, -IMG_MAX_OFFSET, IMG_MAX_OFFSET);
+    avatarImg.style.transition = 'none';
+    avatarImg.style.transform = `translate(${dx}px, ${dy}px) scale(1.12)`;
+    prevDragX = curX;
+    prevDragY = curY;
+  }
+
+  function resetImgOffset() {
+    if (!avatarImg) return;
+    avatarImg.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    avatarImg.style.transform = '';
+  }
+
+  function updatePanelPosition() {
+    const bw = ball.offsetWidth, bh = ball.offsetHeight;
+    const gap = 8;
+    const panelW = 320;
+    const panelH = Math.min(400, window.innerHeight - 40);
+
+    // Horizontal: try left side of ball first, else right, else center
+    let left;
+    const spaceRight = window.innerWidth - (ballX + bw);
+    const spaceLeft = ballX;
+    if (spaceLeft >= panelW + gap) {
+      left = ballX - panelW - gap;
+    } else if (spaceRight >= panelW + gap) {
+      left = ballX + bw + gap;
+    } else {
+      left = Math.max(gap, Math.min(ballX + bw / 2 - panelW / 2, window.innerWidth - panelW - gap));
+    }
+
+    // Vertical: align top of panel with top of ball, clamp to viewport
+    let top = clamp(ballY, gap, window.innerHeight - panelH - gap);
+
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.bottom = 'auto';
+    panel.style.right = 'auto';
+  }
+
+  async function togglePanel() {
     if (!panel.hidden) {
       panel.hidden = true;
       return;
     }
     await loadFaqData();
     renderFaqList();
+    ensureAbsoluteCoords();
+    updatePanelPosition();
     panel.hidden = false;
+  }
+
+  // ── Mouse ──
+  ball.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    isDragging = true;
+    hasMoved = false;
+    ensureAbsoluteCoords();
+    pointerOffsetX = e.clientX - ballX;
+    pointerOffsetY = e.clientY - ballY;
+    prevDragX = e.clientX;
+    prevDragY = e.clientY;
   });
-}
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const newX = e.clientX - pointerOffsetX;
+    const newY = e.clientY - pointerOffsetY;
+    if (!hasMoved && (Math.abs(newX - ballX) > DRAG_THRESHOLD || Math.abs(newY - ballY) > DRAG_THRESHOLD)) {
+      hasMoved = true;
+      ball.classList.add('floating-ball--dragging');
+    }
+    if (hasMoved) {
+      applyImgOffset(e.clientX, e.clientY);
+      const c = clampBall(newX, newY);
+      ballX = c.x; ballY = c.y;
+      ball.style.left = ballX + 'px';
+      ball.style.top = ballY + 'px';
+      if (!panel.hidden) updatePanelPosition();
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    ball.classList.remove('floating-ball--dragging');
+    resetImgOffset();
+    if (!hasMoved) togglePanel();
+  });
+
+  // ── Touch ──
+  ball.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    isDragging = true;
+    hasMoved = false;
+    ensureAbsoluteCoords();
+    pointerOffsetX = touch.clientX - ballX;
+    pointerOffsetY = touch.clientY - ballY;
+    prevDragX = touch.clientX;
+    prevDragY = touch.clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    const newX = touch.clientX - pointerOffsetX;
+    const newY = touch.clientY - pointerOffsetY;
+    if (!hasMoved && (Math.abs(newX - ballX) > DRAG_THRESHOLD || Math.abs(newY - ballY) > DRAG_THRESHOLD)) {
+      hasMoved = true;
+      ball.classList.add('floating-ball--dragging');
+    }
+    if (hasMoved) {
+      e.preventDefault();
+      applyImgOffset(touch.clientX, touch.clientY);
+      const c = clampBall(newX, newY);
+      ballX = c.x; ballY = c.y;
+      ball.style.left = ballX + 'px';
+      ball.style.top = ballY + 'px';
+      if (!panel.hidden) updatePanelPosition();
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    ball.classList.remove('floating-ball--dragging');
+    resetImgOffset();
+    if (!hasMoved) togglePanel();
+  });
+})();
 
 if ($('floatingPanelClose')) {
   $('floatingPanelClose').addEventListener('click', () => {
@@ -2456,9 +2657,7 @@ if ($('floatingPanelBody')) {
     const item = e.target.closest('.faq-item');
     if (!item) return;
     const idx = parseInt(item.dataset.faqIdx);
-    const start = (_faqPage * _FAQ_PER_PAGE) % Math.max(_faqData.length, 1);
-    const realIdx = (start + idx) % _faqData.length;
-    const faq = _faqData[realIdx];
+    const faq = _currentFaqItems[idx];
     if (!faq) return;
     $('faqList').hidden = true;
     const ans = $('faqAnswer');
@@ -2476,7 +2675,6 @@ if ($('faqBack')) {
 
 if ($('faqRefresh')) {
   $('faqRefresh').addEventListener('click', () => {
-    _faqPage++;
     renderFaqList();
   });
 }

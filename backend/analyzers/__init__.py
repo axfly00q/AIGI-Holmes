@@ -14,4 +14,5 @@ from backend.analyzers.seal_detector import analyze as analyze_seal          # n
 from backend.analyzers.frequency_analyzer import analyze as analyze_frequency  # noqa: F401
 from backend.analyzers.edge_analyzer import analyze as analyze_edge          # noqa: F401
 from backend.analyzers.face_analyzer import analyze as analyze_face          # noqa: F401
+from backend.analyzers.logo_analyzer import analyze as analyze_logo          # noqa: F401
 from backend.analyzers.composite import compute_overall                      # noqa: F401

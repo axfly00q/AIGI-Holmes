@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIGI-Holmes — 新闻图片 AI 生成检测</title>
+  <link rel="stylesheet" href="/static/css/landing.css?v={{ cache_bust }}" />
+</head>
+<body>
+
+<div id="landingPage">
+
+  <!-- ── 视频背景 ──────────────────────── -->
+  <div class="lp-video-bg">
+    <video autoplay muted loop playsinline preload="auto">
+      <source src="/static/bg-video.mp4" type="video/mp4" />
+    </video>
+  </div>
+
+  <!-- 遮罩层 -->
+  <div class="lp-overlay"></div>
+
+  <!-- ── 主体布局 ──────────────────────── -->
+  <div class="lp-layout">
+
+    <!-- 左侧 Hero -->
+    <div class="lp-hero">
+      <div class="lp-badge">AI-Generated Image Detection</div>
+
+      <h1 class="lp-title">
+        AIGI<span class="accent">-Holmes</span>
+      </h1>
+
+      <p class="lp-slogan">穿透生成迷雾，锚定信息本源</p>
+
+      <div class="lp-features">
+        <div class="lp-feature-item">
+          <span class="dot"></span>
+          微调 ResNet-50 模型，精准识别 AI 生成图片
+        </div>
+        <div class="lp-feature-item">
+          <span class="dot"></span>
+          Grad-CAM 热力图可视化解释检测依据
+        </div>
+        <div class="lp-feature-item">
+          <span class="dot"></span>
+          支持图片上传 · 新闻 URL 抓取 · 批量检测
+        </div>
+        <div class="lp-feature-item">
+          <span class="dot"></span>
+          LLM 辅助分析，生成可信度报告
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧登录/注册面板 -->
+    <div class="lp-panel-wrap">
+      <div class="lp-panel">
+        <!-- 顶部光条由 CSS ::before 渲染 -->
+        <div class="lp-panel-inner">
+
+          <!-- 品牌 -->
+          <div class="lp-panel-brand">
+            <div class="brand-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
+            </div>
+            <div>
+              <div class="brand-name">AIGI-Holmes</div>
+              <div class="brand-sub">新闻图片 AI 生成检测平台</div>
+            </div>
+          </div>
+
+          <!-- Tab 切换 -->
+          <div class="lp-tabs" role="tablist">
+            <button class="lp-tab-btn active" id="tabLogin" role="tab"
+                    aria-selected="true" aria-controls="formLogin">登录</button>
+            <button class="lp-tab-btn" id="tabRegister" role="tab"
+                    aria-selected="false" aria-controls="formRegister">注册</button>
+          </div>
+
+          <!-- 消息提示（登录/注册共用） -->
+          <div class="lp-msg" id="lpMsg" role="alert" aria-live="polite">
+            <svg class="lp-msg-icon" id="lpMsgIcon" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4m0 4h.01"/>
+            </svg>
+            <span id="lpMsgText"></span>
+          </div>
+
+          <!-- 登录表单 -->
+          <div class="lp-form-wrap">
+            <form class="lp-form visible" id="formLogin" novalidate>
+              <div class="lp-field">
+                <label for="loginUsername">用户名</label>
+                <input type="text" id="loginUsername" name="username"
+                       placeholder="请输入用户名" autocomplete="username" required />
+              </div>
+              <div class="lp-field">
+                <label for="loginPassword">密码</label>
+                <input type="password" id="loginPassword" name="password"
+                       placeholder="请输入密码" autocomplete="current-password" required />
+              </div>
+              <button type="submit" class="lp-submit-btn" id="loginBtn">
+                登录
+              </button>
+            </form>
+
+            <!-- 注册表单 -->
+            <form class="lp-form" id="formRegister" novalidate>
+              <div class="lp-field">
+                <label for="regUsername">用户名</label>
+                <input type="text" id="regUsername" name="username"
+                       placeholder="设置用户名（3-32字符）" autocomplete="username" required />
+              </div>
+              <div class="lp-field">
+                <label for="regPassword">密码</label>
+                <input type="password" id="regPassword" name="password"
+                       placeholder="设置密码（6位以上）" autocomplete="new-password" required />
+              </div>
+              <div class="lp-field">
+                <label for="regConfirm">确认密码</label>
+                <input type="password" id="regConfirm" name="confirm"
+                       placeholder="再次输入密码" autocomplete="new-password" required />
+              </div>
+              <button type="submit" class="lp-submit-btn" id="registerBtn">
+                创建账号
+              </button>
+            </form>
+          </div>
+
+          <!-- 面板底部 -->
+          <div class="lp-panel-footer">
+            登录即代表您同意平台使用条款与隐私政策
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /lp-layout -->
+</div><!-- /landingPage -->
+
+<script>
+(function () {
+  'use strict';
+
+  const AUTH_KEY         = 'aigi_token';
+  const AUTH_REFRESH_KEY = 'aigi_refresh';
+  const AUTH_USER_KEY    = 'aigi_user';
+
+  /* ── 若已登录且本次浏览器会话有效，直接跳过欢迎页 ──
+       sessionStorage 在关闭标签页/浏览器后自动清除，
+       因此重新打开浏览器一定会回到登录页               */
+  if (localStorage.getItem(AUTH_KEY) && sessionStorage.getItem('aigi_session_active')) {
+    window.location.replace('/app');
+    return;
+  }
+
+  /* ── 工具函数 ─────────────────── */
+  function $(id) { return document.getElementById(id); }
+
+  function showMsg(text, type /* 'error'|'success' */) {
+    const el   = $('lpMsg');
+    const icon = $('lpMsgIcon');
+    const span = $('lpMsgText');
+
+    el.className = 'lp-msg ' + type;
+    span.textContent = text;
+
+    if (type === 'error') {
+      icon.innerHTML = `
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 8v4m0 4h.01"/>`;
+    } else {
+      icon.innerHTML = `
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>`;
+    }
+  }
+
+  function hideMsg() {
+    $('lpMsg').className = 'lp-msg';
+  }
+
+  function setLoading(btn, loading) {
+    if (loading) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="lp-spinner"></span>处理中…';
+    } else {
+      btn.disabled = false;
+      btn.textContent = btn.id === 'loginBtn' ? '登录' : '创建账号';
+    }
+  }
+
+  function fadeOutAndRedirect() {
+    $('landingPage').classList.add('fade-out');
+    setTimeout(function () {
+      window.location.replace('/app');
+    }, 580);
+  }
+
+  function saveAuth(tokens, username, role) {
+    localStorage.setItem(AUTH_KEY, tokens.access_token);
+    if (tokens.refresh_token) {
+      localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
+    }
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify({ username: username, role: role }));
+    /* 标记本次浏览器会话已登录，关闭浏览器后自动失效 */
+    sessionStorage.setItem('aigi_session_active', '1');
+  }
+
+  /* ── Tab 切换 ─────────────────── */
+  $('tabLogin').addEventListener('click', function () {
+    $('tabLogin').classList.add('active');
+    $('tabRegister').classList.remove('active');
+    $('formLogin').classList.add('visible');
+    $('formRegister').classList.remove('visible');
+    hideMsg();
+  });
+
+  $('tabRegister').addEventListener('click', function () {
+    $('tabRegister').classList.add('active');
+    $('tabLogin').classList.remove('active');
+    $('formRegister').classList.add('visible');
+    $('formLogin').classList.remove('visible');
+    hideMsg();
+  });
+
+  /* ── 登录提交 ─────────────────── */
+  $('formLogin').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    hideMsg();
+
+    const username = $('loginUsername').value.trim();
+    const password = $('loginPassword').value;
+
+    if (!username || !password) {
+      showMsg('请填写用户名和密码', 'error');
+      return;
+    }
+
+    setLoading($('loginBtn'), true);
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, password: password })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const detail = data.detail;
+        if (typeof detail === 'string') {
+          showMsg(detail, 'error');
+        } else if (Array.isArray(detail)) {
+          showMsg(detail[0]?.msg || '登录失败，请检查账号和密码', 'error');
+        } else {
+          showMsg('登录失败，请检查账号和密码', 'error');
+        }
+        return;
+      }
+
+      saveAuth(data, username, data.role || 'user');
+      showMsg('登录成功，正在进入…', 'success');
+      setTimeout(fadeOutAndRedirect, 600);
+
+    } catch (err) {
+      showMsg('网络错误，请检查连接后重试', 'error');
+    } finally {
+      setLoading($('loginBtn'), false);
+    }
+  });
+
+  /* ── 注册提交 ─────────────────── */
+  $('formRegister').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    hideMsg();
+
+    const username = $('regUsername').value.trim();
+    const password = $('regPassword').value;
+    const confirm  = $('regConfirm').value;
+
+    if (!username || !password || !confirm) {
+      showMsg('请填写所有字段', 'error');
+      return;
+    }
+    if (username.length < 3) {
+      showMsg('用户名至少需要 3 个字符', 'error');
+      return;
+    }
+    if (password.length < 6) {
+      showMsg('密码至少需要 6 个字符', 'error');
+      return;
+    }
+    if (password !== confirm) {
+      showMsg('两次输入的密码不一致', 'error');
+      return;
+    }
+
+    setLoading($('registerBtn'), true);
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, password: password })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const detail = data.detail;
+        if (typeof detail === 'string') {
+          showMsg(detail, 'error');
+        } else if (Array.isArray(detail)) {
+          showMsg(detail[0]?.msg || '注册失败，请更换用户名重试', 'error');
+        } else {
+          showMsg('注册失败，请更换用户名重试', 'error');
+        }
+        return;
+      }
+
+      /* 注册成功 — 尝试直接登录 */
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username, password: password })
+      });
+
+      if (loginRes.ok) {
+        const loginData = await loginRes.json();
+        saveAuth(loginData, username, loginData.role || 'user');
+        showMsg('注册成功，正在进入…', 'success');
+        setTimeout(fadeOutAndRedirect, 700);
+      } else {
+        /* 注册成功但自动登录失败，切换到登录页 */
+        showMsg('注册成功！请使用新账号登录', 'success');
+        setTimeout(function () {
+          $('tabLogin').click();
+          $('loginUsername').value = username;
+          $('loginPassword').focus();
+        }, 1200);
+      }
+
+    } catch (err) {
+      showMsg('网络错误，请检查连接后重试', 'error');
+    } finally {
+      setLoading($('registerBtn'), false);
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>

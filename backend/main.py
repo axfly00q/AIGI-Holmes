@@ -108,6 +108,13 @@ _CACHE_BUST = str(int(_time.time()))
 
 
 @app.get("/")
+async def landing(request: Request):
+    if templates:
+        return templates.TemplateResponse(request, "landing.html", {"cache_bust": _CACHE_BUST})
+    return {"message": "AIGI-Holmes API is running. Visit /docs for API docs."}
+
+
+@app.get("/app")
 async def index(request: Request):
     if templates:
         return templates.TemplateResponse(request, "index.html", {"cache_bust": _CACHE_BUST})

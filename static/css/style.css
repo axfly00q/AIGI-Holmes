@@ -205,6 +205,10 @@ body {
   flex: 1;
   min-width: 0;
 }
+/* 修复：hidden 属性被 display:flex 覆盖的问题 */
+.url-topbar-controls[hidden] {
+  display: none !important;
+}
 .url-topbar-controls .url-input {
   flex: 1;
   padding: 7px 14px;
@@ -690,9 +694,9 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
 .gallery-card__img {
   width: 100%;
   aspect-ratio: 4/3;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 .gallery-card__body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -844,6 +848,30 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
 .gallery-card__cat { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
 .gallery-card__consistency { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; color: #64748b; }
 .consistency-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* 媒体来源 Logo 徽章（图片卡片） */
+.gallery-card__logo-signal { display: flex; align-items: center; gap: 4px; font-size: 0.76rem; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 2px 7px; margin-top: 4px; width: fit-content; }
+.logo-signal-icon { font-style: normal; }
+.logo-signal-text { font-weight: 600; }
+.logo-signal-conf { color: #64748b; font-size: 0.72rem; }
+
+/* 印章分 + 人脸分 小芯片 */
+.gallery-card__dim-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.dim-chip { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: #f8fafc; border: 1px solid #e2e8f0; }
+.dim-chip--seal { border-color: #fde68a; background: #fefce8; }
+.dim-chip--face { border-color: #fbcfe8; background: #fdf2f8; }
+
+/* 报告层媒体来源信号 */
+.report-logo-signal { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 7px; padding: 6px 12px; margin: 8px 0; }
+.report-logo-signal strong { font-weight: 700; }
+
+/* 汇总面板媒体 Logo 信号 */
+.url-logo-signal { display: flex; align-items: center; gap: 5px; font-size: 0.80rem; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 7px; padding: 5px 10px; margin-top: 6px; }
+.url-logo-signal strong { font-weight: 700; }
+
+/* 报告维度网格 8列 */
+.report-dim-grid--8 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 640px) { .report-dim-grid--8 { grid-template-columns: repeat(2, 1fr); } }
 
 /* 文章摘要—标题行（含状态 pills） */
 .url-summary-title-row {
@@ -1181,6 +1209,7 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
 .admin-pagination .page-btn:hover { background: #f1f5f9; color: #1e293b; }
 .admin-pagination .page-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
 .admin-pagination .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.admin-pagination .page-btn--nav { width: auto; padding: 0 8px; white-space: nowrap; }
 .admin-pagination .page-ellipsis { color: #64748b; padding: 0 4px; line-height: 30px; }
 
 .admin-stats-btn {
@@ -1340,25 +1369,34 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
 /* ── Floating Ball ────────────────────────────────────────── */
 .floating-ball {
   position: fixed;
-  bottom: 28px;
-  right: 28px;
-  width: 56px;
-  height: 56px;
+  bottom: 20px;
+  right: 20px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: transparent;
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+  cursor: grab;
+  box-shadow: none;
   z-index: 200;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.15s, box-shadow 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: visible;
 }
 
 .floating-ball:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 24px rgba(59, 130, 246, 0.5);
+  transform: scale(1.08);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+}
+
+.floating-ball--dragging {
+  cursor: grabbing !important;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  transition: none;
 }
 
 .floating-ball__avatar {
@@ -1367,15 +1405,18 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
   justify-content: center;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  overflow: hidden;
+  /* allow character image to shift outside ball boundary */
+  overflow: visible;
 }
 
 .floating-ball__avatar img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
+  object-fit: contain;
+  pointer-events: none;
+  border-radius: 0;
+  transform-origin: center bottom;
+  will-change: transform;
 }
 
 /* ── Floating Panel ───────────────────────────────────────── */
@@ -1383,6 +1424,7 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
   position: fixed;
   bottom: 96px;
   right: 28px;
+  /* JS overrides position when ball is dragged */
   width: 320px;
   max-height: 400px;
   background: #ffffff;
@@ -2090,7 +2132,7 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
   min-height: 300px;
   color: #cbd5e1;
 }
-.spinner {
+.text-loading .spinner {
   width: 40px;
   height: 40px;
   border: 3px solid #334155;

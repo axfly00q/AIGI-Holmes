@@ -33,7 +33,7 @@ from detect import (
 )
 from detect_text import extract_images_from_file
 from backend.clip_classify import classify_image, classify_text_image_consistency
-from backend.analyzers import analyze_seal, analyze_frequency, analyze_edge, analyze_face
+from backend.analyzers import analyze_seal, analyze_frequency, analyze_edge, analyze_face, analyze_logo
 from backend.analyzers.composite import compute_overall
 
 router = APIRouter(prefix="/api", tags=["detection"])
@@ -83,6 +83,8 @@ class UrlResultItem(BaseModel):
     frequency_score: float | None = None
     edge_score: float | None = None
     face_score: float | None = None
+    logo_detected: str | None = None
+    logo_confidence: float | None = None
 
 
 class DetectUrlResponse(BaseModel):
@@ -219,11 +221,12 @@ async def api_detect_url(
 
         thumb_task = loop.run_in_executor(None, _build_thumb, img)
 
-        # Run 4 new analyzers in parallel
+        # Run 4 new analyzers + logo in parallel
         seal_task = analyze_seal(img)
         freq_task = analyze_frequency(img)
         edge_task = analyze_edge(img)
         face_task = analyze_face(img)
+        logo_task = analyze_logo(img)
 
         # Text-image consistency
         consistency = None
@@ -231,19 +234,21 @@ async def api_detect_url(
             cons_task = loop.run_in_executor(
                 None, classify_text_image_consistency, img, page_summary or article_text[:200]
             )
-            det, category, b64, seal_result, freq_result, edge_result, face_result, consistency = (
+            det, category, b64, seal_result, freq_result, edge_result, face_result, logo_result, consistency = (
                 await asyncio.gather(
                     det_task, cat_task, thumb_task,
                     seal_task, freq_task, edge_task, face_task,
+                    logo_task,
                     cons_task,
                 )
             )
             consistency_scores.append(consistency["score"])
         else:
-            det, category, b64, seal_result, freq_result, edge_result, face_result = (
+            det, category, b64, seal_result, freq_result, edge_result, face_result, logo_result = (
                 await asyncio.gather(
                     det_task, cat_task, thumb_task,
                     seal_task, freq_task, edge_task, face_task,
+                    logo_task,
                 )
             )
 
@@ -270,6 +275,8 @@ async def api_detect_url(
             "frequency_score": round(freq_result["score"], 1),
             "edge_score": round(edge_result["score"], 1),
             "face_score": round(face_result["score"], 1),
+            "logo_detected": logo_result.get("detected_logo"),
+            "logo_confidence": round(logo_result.get("logo_confidence", 0.0), 1),
         }
         results.append(item)
         total_confidence += det["confidence"]
