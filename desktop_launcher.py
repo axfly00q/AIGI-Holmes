@@ -42,6 +42,32 @@ if getattr(sys, "frozen", False):
     print(f"[INIT] CWD fixed to: {_exe_dir}", flush=True)
 
 # ---------------------------------------------------------------------------
+# 3. Load .env into os.environ BEFORE importing any backend module.
+#    pydantic-settings BaseSettings only reads declared fields — anything not
+#    declared (e.g. SERPER_API_KEY) is ignored.  load_dotenv() populates
+#    os.environ so that os.getenv("SERPER_API_KEY") works everywhere.
+# ---------------------------------------------------------------------------
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _env_file = Path(os.getcwd()) / ".env"
+    # Frozen app: if .env doesn't exist yet, copy from .env.example in _MEIPASS
+    if not _env_file.exists():
+        _meipass_dir = getattr(sys, "_MEIPASS", None)
+        if _meipass_dir:
+            _example = Path(_meipass_dir) / ".env.example"
+            if _example.exists():
+                import shutil as _shutil
+                _shutil.copy(_example, _env_file)
+                print(f"[INIT] Created .env from .env.example", flush=True)
+    if _env_file.exists():
+        _load_dotenv(_env_file, override=False)
+        print(f"[INIT] Loaded .env from: {_env_file}", flush=True)
+    else:
+        print(f"[INIT] WARNING: .env not found at {_env_file}", flush=True)
+except Exception as _dotenv_err:
+    print(f"[INIT] WARNING: load_dotenv failed: {_dotenv_err}", flush=True)
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 HOST            = "127.0.0.1"
@@ -79,6 +105,65 @@ def _show_error(title: str, message: str) -> None:
         ctypes.windll.user32.MessageBoxW(0, message, title, 0x10)  # MB_ICONERROR
     except Exception:
         pass  # non-Windows or ctypes unavailable
+
+
+def _show_status_window(url: str) -> None:
+    """Show a small tkinter status window.  Blocks until the user closes it."""
+    try:
+        import tkinter as tk
+
+        root = tk.Tk()
+        root.title("AIGI-Holmes")
+        root.geometry("420x160")
+        root.resizable(False, False)
+        root.configure(bg="#1a1a2e")
+
+        # Center on screen
+        root.update_idletasks()
+        sw = root.winfo_screenwidth()
+        sh = root.winfo_screenheight()
+        x = (sw - 420) // 2
+        y = (sh - 160) // 2
+        root.geometry(f"420x160+{x}+{y}")
+
+        tk.Label(
+            root, text="AIGI-Holmes  正在运行",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            fg="#e0e0e0", bg="#1a1a2e",
+        ).pack(pady=(20, 4))
+
+        tk.Label(
+            root, text=f"已在浏览器中打开：{url}",
+            font=("Microsoft YaHei UI", 9),
+            fg="#aaaacc", bg="#1a1a2e",
+        ).pack()
+
+        tk.Label(
+            root, text="关闭此窗口即可退出程序",
+            font=("Microsoft YaHei UI", 8),
+            fg="#666688", bg="#1a1a2e",
+        ).pack(pady=(2, 0))
+
+        btn = tk.Button(
+            root, text="退出程序",
+            font=("Microsoft YaHei UI", 9),
+            bg="#e05050", fg="white",
+            relief="flat", padx=12, pady=4,
+            command=root.destroy,
+            cursor="hand2",
+        )
+        btn.pack(pady=12)
+
+        root.mainloop()
+        print("[SHUTDOWN] Status window closed", flush=True)
+    except Exception as e:
+        # tkinter unavailable — keep the process alive via sleep loop
+        print(f"[WARNING] tkinter unavailable ({e}), falling back to sleep loop", flush=True)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("[SHUTDOWN] Interrupted by user", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -153,8 +238,6 @@ def _run_backend():
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    import traceback as _tb
-
     global PORT, URL
     # ── Find a free port ───────────────────────────────────────────────────
     try:
@@ -170,15 +253,6 @@ def main() -> None:
     print(f"[STARTUP] CWD       : {os.getcwd()}", flush=True)
     if getattr(sys, "frozen", False):
         print(f"[STARTUP] _MEIPASS  : {sys._MEIPASS}", flush=True)
-
-    # ── Try importing pywebview early ──────────────────────────────────────
-    webview = None
-    try:
-        import webview as _wv
-        webview = _wv
-        print("[STARTUP] pywebview : available", flush=True)
-    except Exception as e:
-        print(f"[WARNING] pywebview not available ({e}) — will open system browser", flush=True)
 
     # ── Start backend in a daemon thread ───────────────────────────────────
     print(f"[STARTUP] Starting backend on {URL} …", flush=True)
@@ -201,38 +275,13 @@ def main() -> None:
 
     print(f"[STARTUP] Server is ready at {URL}", flush=True)
 
-    # ── Open desktop window or fall back to system browser ─────────────────
-    if webview is not None:
-        try:
-            window = webview.create_window(        # noqa: F841
-                title=WINDOW_TITLE,
-                url=URL,
-                width=1280,
-                height=900,
-                resizable=True,
-                min_size=(800, 600),
-            )
-            # webview.start() blocks on the main thread until the window closes
-            webview.start()
-            print("[SHUTDOWN] Desktop window closed", flush=True)
-            return
-        except Exception as e:
-            _tb.print_exc()
-            print(f"[WARNING] pywebview failed ({e}) — falling back to browser", flush=True)
-
-    # Fallback: open in the user's default browser
+    # ── Open in system browser (supports native file downloads) ────────────
     import webbrowser
     webbrowser.open(URL)
     print(f"[INFO] Opened system browser at {URL}", flush=True)
-    print(f"[INFO] Keep this window open while using the application.", flush=True)
-    print(f"[INFO] Press Ctrl+C to quit.", flush=True)
 
-    # Keep the process alive so the daemon thread (uvicorn) keeps running
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("[SHUTDOWN] Interrupted by user", flush=True)
+    # ── Show a minimal status window so users can quit cleanly ─────────────
+    _show_status_window(URL)
 
 
 if __name__ == "__main__":

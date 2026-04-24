@@ -111,6 +111,10 @@ Name: "desktopicon"; Description: "在桌面创建快捷方式 (&D)"; GroupDescr
 ; bundled data (templates/, static/, clip/, CLIP models, etc.).
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Copy .env file containing API keys (Doubao, Serper) and configuration.
+; Using absolute path to ensure Inno Setup finds it regardless of working directory.
+Source: "d:\aigi修改\AIGI-Holmes-main\.env"; DestDir: "{app}"; Flags: ignoreversion
+
 ; =============================================================================
 [Icons]
 ; Start Menu

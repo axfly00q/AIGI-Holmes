@@ -54,6 +54,11 @@ extra_datas = [
 
     # ── Default environment — users can edit after installation ─────────────
     _dir_data('.env.example', '.'),
+
+    # ── CLIP ViT-B/32 weights (pre-downloaded for offline use) ──────────────
+    # Placed in models/clip/ in the project root before running pyinstaller.
+    # desktop_launcher -> backend/clip_classify.py reads from _MEIPASS/clip_models/
+    _dir_data('models/clip', 'clip_models'),
 ]
 
 # Collect Jinja2 templates bundled inside the package itself
@@ -147,6 +152,14 @@ hidden += ['PIL', 'PIL.Image', 'PIL.ImageOps', 'PIL.ImageDraw',
 # ── Numpy & scientific stack ──────────────────────────────────────────────────
 hidden += ['numpy', 'numpy.core', 'numpy.lib', 'numpy.random']
 
+# ── SciPy (frequency-domain analyser uses scipy.fft) ────────────────────────
+hidden += collect_submodules('scipy')
+extra_datas += collect_data_files('scipy')
+
+# ── OpenCV headless (edge/face/seal analysers) ───────────────────────────────
+hidden += ['cv2', 'cv2.cv2']
+extra_datas += collect_data_files('cv2')
+
 # ── CLIP module (editable install) ────────────────────────────────────────────
 hidden += ['clip', 'clip.clip', 'clip.model', 'clip.simple_tokenizer',
            'ftfy', 'ftfy.bad_codecs', 'regex', 'tqdm', 'tqdm.auto']
@@ -201,14 +214,11 @@ a = Analysis(
     runtime_hooks=[str(ROOT / 'pyi_rthook_cwd.py')],
     excludes=[
         # These are not used at runtime and are HUGE — skip them
-        'tkinter', '_tkinter',
         'matplotlib', 'matplotlib.pyplot',
         'notebook', 'jupyter', 'jupyter_core', 'jupyter_client',
         'IPython',
-        'scipy',
         'pandas',
         'sklearn', 'sklearn',
-        'cv2',           # OpenCV (not used in this project)
         'PySide2', 'PySide6', 'PyQt5', 'PyQt6',   # Qt backends for pywebview — not used on Windows
         'gi',           # GTK
         # test / dev only

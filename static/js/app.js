@@ -22,6 +22,30 @@ const AUTH_REFRESH_KEY = 'aigi_refresh';
 const AUTH_USER_KEY = 'aigi_user';
 
 function getToken() { return localStorage.getItem(AUTH_KEY); }
+function parseJwtPayload(token) {
+  if (!token) return null;
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+function getCurrentUser() {
+  const raw = localStorage.getItem(AUTH_USER_KEY);
+  const storedUser = raw ? JSON.parse(raw) : null;
+  const tokenPayload = parseJwtPayload(getToken());
+  if (!tokenPayload) return storedUser;
+  const currentUser = {
+    username: storedUser?.username || tokenPayload.username || '',
+    role: tokenPayload.role || storedUser?.role || 'user',
+    display_name: storedUser?.display_name || '',
+    avatar_b64: storedUser?.avatar_b64 || '',
+  };
+  localStorage.setItem(AUTH_USER_KEY, JSON.stringify(currentUser));
+  return currentUser;
+}
 function authHeaders() {
   const t = getToken();
   return t ? { 'Authorization': 'Bearer ' + t } : {};
@@ -39,20 +63,48 @@ function clearAuth() {
   localStorage.removeItem(AUTH_USER_KEY);
   window.location.replace('/');
 }
+async function refreshAuthSession() {
+  const refreshToken = localStorage.getItem(AUTH_REFRESH_KEY);
+  if (!refreshToken) {
+    updateAuthBar();
+    return;
+  }
+  try {
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      updateAuthBar();
+      return;
+    }
+    const tokens = await response.json();
+    const currentUser = getCurrentUser();
+    const payload = parseJwtPayload(tokens.access_token);
+    saveAuth(tokens, currentUser?.username || '', payload?.role || currentUser?.role || 'user');
+  } catch {
+    updateAuthBar();
+  }
+}
 function updateAuthBar() {
-  const raw = localStorage.getItem(AUTH_USER_KEY);
-  if (raw) {
-    const u = JSON.parse(raw);
+  const u = getCurrentUser();
+  if (u) {
     $('authGuest').hidden = true;
     $('authUser').hidden  = false;
-    $('authUsername').textContent = u.username;
+    const displayLabel = u.display_name || u.username;
+    $('authUsername').textContent = displayLabel;
     const badge = $('authRoleBadge');
     badge.textContent = u.role;
     badge.className   = 'auth-role-badge role-' + u.role;
-    // Set avatar with first character
+    // Set avatar: image if available, otherwise first character
     const avatar = $('sidebarUserAvatar');
     if (avatar) {
-      avatar.textContent = (u.username || 'A')[0].toUpperCase();
+      if (u.avatar_b64) {
+        avatar.innerHTML = `<img src="${u.avatar_b64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      } else {
+        avatar.textContent = (displayLabel || 'A')[0].toUpperCase();
+      }
     }
     $('btnShowRole').hidden = false;
     const isAdmin = u.role === 'admin';
@@ -75,7 +127,7 @@ function updateAuthBar() {
     });
   }
   updateBatchAccess();
-  if (!raw && $('reportDownload')) $('reportDownload').hidden = true;
+  if (!u && $('reportDownload')) $('reportDownload').hidden = true;
 }
 
 $('btnShowLogin').addEventListener('click',  () => { $('loginModal').hidden = false; });
@@ -105,8 +157,9 @@ $('btnLogin').addEventListener('click', async () => {
   });
   const d = await r.json();
   if (!r.ok) { setStatus($('loginStatus'), '' + (d.message || '登录失败'), 'error'); return; }
-  const role = JSON.parse(atob(d.access_token.split('.')[1])).role;
+  const role = parseJwtPayload(d.access_token)?.role || 'user';
   saveAuth(d, username, role);
+  localStorage.setItem('aigi_login_agreed', 'true');
   $('loginModal').hidden = true;
   $('loginUser').value = '';
   $('loginPass').value = '';
@@ -116,25 +169,51 @@ $('btnLogin').addEventListener('click', async () => {
 $('btnRegister').addEventListener('click', async () => {
   const username = $('regUser').value.trim();
   const password = $('regPass').value;
+  const privacyAgree = $('regPrivacyAgree') && $('regPrivacyAgree').checked;
   if (!username || !password) { setStatus($('registerStatus'), '请填写用户名和密码', 'error'); return; }
+  if (!privacyAgree) { setStatus($('registerStatus'), '请先同意隐私政策', 'error'); return; }
   const r = await fetch('/api/auth/register', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
   const d = await r.json();
   if (!r.ok) { setStatus($('registerStatus'), '' + (d.message || '注册失败'), 'error'); return; }
-  const role = JSON.parse(atob(d.access_token.split('.')[1])).role;
+  const role = parseJwtPayload(d.access_token)?.role || 'user';
   saveAuth(d, username, role);
+  // Record privacy agreement
+  fetch('/api/me/privacy', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ agreed: true }),
+  }).catch(() => {});
   $('loginModal').hidden = true;
   $('regUser').value = '';
   $('regPass').value = '';
+  if ($('regPrivacyAgree')) { $('regPrivacyAgree').checked = false; $('btnRegister').disabled = true; }
   setStatus($('registerStatus'), '', '');
 });
+
+// Enable register button only when privacy checkbox is checked
+if ($('regPrivacyAgree')) {
+  $('regPrivacyAgree').addEventListener('change', function() {
+    $('btnRegister').disabled = !this.checked;
+  });
+}
+
+// Init login privacy checkbox (persisted across page loads)
+if ($('loginPrivacyAgree')) {
+  const _loginAgreed = localStorage.getItem('aigi_login_agreed') === 'true';
+  $('loginPrivacyAgree').checked = _loginAgreed;
+  if ($('btnLogin')) $('btnLogin').disabled = !_loginAgreed;
+  $('loginPrivacyAgree').addEventListener('change', function() {
+    if ($('btnLogin')) $('btnLogin').disabled = !this.checked;
+    localStorage.setItem('aigi_login_agreed', this.checked ? 'true' : 'false');
+  });
+}
 
 $('loginPass').addEventListener('keydown',   e => { if (e.key === 'Enter') $('btnLogin').click(); });
 $('regPass').addEventListener('keydown',     e => { if (e.key === 'Enter') $('btnRegister').click(); });
 
-updateAuthBar();
+refreshAuthSession();
 
 function openRoleModal() {
   $('roleStep1').hidden  = false;
@@ -144,6 +223,7 @@ function openRoleModal() {
   $('roleSelect').value  = 'user';
   $('rolePassError').hidden = true;
   setStatus($('roleStatus'), '', '');
+  $('btnRoleChange').disabled = true;
   $('roleModal').hidden  = false;
 }
 function closeRoleModal() { $('roleModal').hidden = true; }
@@ -152,15 +232,17 @@ $('btnRoleModalClose').addEventListener('click', closeRoleModal);
 $('roleModal').addEventListener('click', e => { if (e.target === $('roleModal')) closeRoleModal(); });
 
 $('btnRoleUnlock').addEventListener('click', () => {
-  if ($('rolePass').value === 'aigi') {
+  if ($('rolePass').value.trim()) {
     $('rolePassError').hidden = true;
     $('roleStep1').hidden = true;
     $('roleStep2').hidden = false;
-    setStatus($('roleStatus'), '✅ 密码正确，已进入角色管理界面', 'success');
+    $('btnRoleChange').disabled = false;
+    setStatus($('roleStatus'), '已进入角色管理界面，提交时将由服务器校验管理密码', 'success');
   } else {
     $('rolePassError').hidden = false;
     $('rolePass').value = '';
     $('rolePass').focus();
+    $('btnRoleChange').disabled = true;
     $('btnRoleUnlock').disabled = true;
     setTimeout(() => { $('btnRoleUnlock').disabled = false; }, 2000);
   }
@@ -170,21 +252,22 @@ $('rolePass').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnRo
 $('btnRoleChange').addEventListener('click', async () => {
   const targetUsername = $('roleTargetUser').value.trim();
   const newRole = $('roleSelect').value;
+  const adminPassword = $('rolePass').value.trim();
   if (!targetUsername) { setStatus($('roleStatus'), '请输入目标用户名', 'error'); return; }
+  if ($('roleStep2').hidden || !adminPassword) { setStatus($('roleStatus'), '请先验证管理密码', 'error'); return; }
   $('btnRoleChange').disabled = true;
   $('btnRoleChange').textContent = '修改中…';
   try {
     const r = await fetch(`/api/auth/admin/users/${encodeURIComponent(targetUsername)}/role`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ role: newRole }),
+      body: JSON.stringify({ role: newRole, admin_password: adminPassword }),
     });
     const d = await r.json();
     if (!r.ok) { setStatus($('roleStatus'), '' + (d.detail || d.message || '修改失败'), 'error');
     } else {
       setStatus($('roleStatus'), `已将 ${d.username} 的角色改为 ${d.role}`, 'success');
-      const rawUser = localStorage.getItem(AUTH_USER_KEY);
-      if (rawUser) {
-        const cu = JSON.parse(rawUser);
+      const cu = getCurrentUser();
+      if (cu) {
         if (cu.username === d.username) {
           cu.role = d.role;
           localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu));
@@ -199,6 +282,8 @@ $('btnRoleChange').addEventListener('click', async () => {
               if (newTokens) {
                 localStorage.setItem(AUTH_KEY, newTokens.access_token);
                 if (newTokens.refresh_token) localStorage.setItem(AUTH_REFRESH_KEY, newTokens.refresh_token);
+                const nextRole = parseJwtPayload(newTokens.access_token)?.role || d.role;
+                localStorage.setItem(AUTH_USER_KEY, JSON.stringify({ username: cu.username, role: nextRole }));
               }
               updateAuthBar();
             }).catch(() => updateAuthBar());
@@ -869,11 +954,11 @@ document.addEventListener('click', (e) => {
 });
 
 function updateBatchAccess(){
-  const raw=localStorage.getItem(AUTH_USER_KEY);
-  const role=raw?JSON.parse(raw).role:null;
+  const currentUser = getCurrentUser();
+  const role=currentUser?currentUser.role:null;
   const allow=role==='auditor'||role==='admin';
   const hint=$('batchAuthHint');
-  if(!raw){hint.hidden=false;hint.querySelector('p').textContent='批量检测需要登录';
+  if(!currentUser){hint.hidden=false;hint.querySelector('p').textContent='批量检测需要登录';
   }else if(!allow){hint.hidden=false;hint.querySelector('p').innerHTML='需要 auditor / admin';
   }else{hint.hidden=true;}
 }
@@ -1079,8 +1164,8 @@ function initBatchZone(){
 }
 
 async function handleBatchFiles(fileList){
-  const raw=localStorage.getItem(AUTH_USER_KEY);
-  const role=raw?JSON.parse(raw).role:null;
+  const currentUser = getCurrentUser();
+  const role=currentUser?currentUser.role:null;
   if(role!=='auditor'&&role!=='admin'){
     setStatus($('batchStatus'),'需要 auditor / admin 权限','error');
     return;
@@ -1420,9 +1505,8 @@ function _renderPagination(container, currentPage, total, pageSize, fnName) {
 }
 
 function openAdminPanel() {
-  const rawUser = localStorage.getItem(AUTH_USER_KEY);
-  if (!rawUser) { $('loginModal').hidden = false; return; }
-  const u = JSON.parse(rawUser);
+  const u = getCurrentUser();
+  if (!u) { $('loginModal').hidden = false; return; }
   if (u.role !== 'admin') { alert('权限不足：仅管理员可访问管理后台'); return; }
   switchToTab('history');
   switchHistoryTab('admin-panel');
@@ -3179,3 +3263,327 @@ function showToast(message) {
     }
   }
 })();
+
+// ── Settings Modal ──────────────────────────────────────────────────────────
+(function initSettings() {
+  if ($('btnShowSettings')) {
+    $('btnShowSettings').addEventListener('click', openSettingsModal);
+  }
+  if ($('btnSettingsClose')) {
+    $('btnSettingsClose').addEventListener('click', () => { $('settingsModal').hidden = true; });
+  }
+  if ($('settingsModal')) {
+    $('settingsModal').addEventListener('click', e => {
+      if (e.target === $('settingsModal')) $('settingsModal').hidden = true;
+    });
+  }
+
+  // Tab switching — HTML uses data-stab, pane IDs are settings-{tab}
+  document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchSettingsTab(btn.dataset.stab));
+  });
+
+  function switchSettingsTab(tab) {
+    document.querySelectorAll('.settings-tab-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.stab === tab)
+    );
+    document.querySelectorAll('.settings-pane').forEach(p =>
+      p.classList.toggle('active', p.id === 'settings-' + tab)
+    );
+  }
+
+  async function openSettingsModal() {
+    $('settingsModal').hidden = false;
+    switchSettingsTab('profile');
+    try {
+      const r = await fetch('/api/me', { headers: authHeaders() });
+      if (!r.ok) return;
+      const d = await r.json();
+      // Profile fields
+      if ($('settingsDisplayName')) $('settingsDisplayName').value = d.display_name || '';
+      if ($('settingsBio')) $('settingsBio').value = d.bio || '';
+      // Sync display_name and avatar to localStorage so sidebar stays in sync
+      const _cu = getCurrentUser();
+      if (_cu) {
+        _cu.display_name = d.display_name || '';
+        _cu.avatar_b64   = d.avatar_b64   || '';
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(_cu));
+        updateAuthBar();
+      }
+      // Avatar
+      const circle = $('settingsAvatarCircle');
+      const img    = $('settingsAvatarImg');
+      if (d.avatar_b64) {
+        if (circle) circle.textContent = '';
+        if (img) { img.src = d.avatar_b64; img.hidden = false; }
+      } else {
+        if (circle) circle.textContent = (d.display_name || d.username || 'A')[0].toUpperCase();
+        if (img) { img.src = ''; img.hidden = true; }
+      }
+      // Read-only account info
+      if ($('settingsUserId'))       $('settingsUserId').textContent       = d.id || '—';
+      if ($('settingsUserRole'))     $('settingsUserRole').textContent     = d.role || '—';
+      if ($('settingsCreatedAt'))    $('settingsCreatedAt').textContent    = d.created_at ? new Date(d.created_at).toLocaleDateString('zh-CN') : '—';
+      // Privacy agreement date
+      if ($('settingsPrivacyDate') && d.privacy_agreed_at) {
+        $('settingsPrivacyDate').textContent = '已同意（' + new Date(d.privacy_agreed_at).toLocaleDateString('zh-CN') + '）';
+      }
+      // Stats (in privacy tab)
+      const sr = await fetch('/api/me/history/stats', { headers: authHeaders() });
+      if (sr.ok) {
+        const sd = await sr.json();
+        if ($('statTotal')) $('statTotal').textContent = sd.total;
+        if ($('statReal'))  $('statReal').textContent  = sd.real;
+        if ($('statFake'))  $('statFake').textContent  = sd.fake;
+        if ($('settingsDetectionCount')) $('settingsDetectionCount').textContent = sd.total;
+      }
+      // Prefs from localStorage
+      if ($('prefHistoryEnabled')) $('prefHistoryEnabled').checked = localStorage.getItem('aigi_history_sync') !== 'false';
+      if ($('prefAutoHeatmap'))    $('prefAutoHeatmap').checked    = localStorage.getItem('aigi_heatmap_auto') === 'true';
+      if ($('prefLightTheme'))     $('prefLightTheme').checked     = localStorage.getItem('aigi_dark_theme') === 'true';
+      if ($('prefAiTemplate'))     $('prefAiTemplate').value       = localStorage.getItem('aigi_default_question') || '';
+    } catch(e) { console.error('settings load error', e); }
+  }
+
+  // ── Profile: avatar upload with Cropper.js ──────────────────────────
+  let _cropper = null;
+
+  function _closeCropModal() {
+    if (_cropper) { _cropper.destroy(); _cropper = null; }
+    if ($('cropModalOverlay')) $('cropModalOverlay').hidden = true;
+    if ($('avatarInput'))      $('avatarInput').value = '';
+  }
+
+  if ($('avatarInput')) {
+    $('avatarInput').addEventListener('change', e => {
+      const file = e.target.files[0]; if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { alert('图片不能超过 5 MB'); e.target.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const imgEl = $('cropSource');
+        if (!imgEl) return;
+        imgEl.src = ev.target.result;
+        $('cropModalOverlay').hidden = false;
+        if (_cropper) { _cropper.destroy(); _cropper = null; }
+        _cropper = new Cropper(imgEl, {
+          aspectRatio: 1,
+          viewMode: 1,
+          dragMode: 'move',
+          autoCropArea: 1,
+          restore: false,
+          guides: false,
+          center: false,
+          highlight: false,
+          cropBoxMovable: true,
+          cropBoxResizable: true,
+          toggleDragModeOnDblclick: false,
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  if ($('btnCropCancel')) {
+    $('btnCropCancel').addEventListener('click', _closeCropModal);
+  }
+
+  if ($('btnCropConfirm')) {
+    $('btnCropConfirm').addEventListener('click', async () => {
+      if (!_cropper) return;
+      const canvas = _cropper.getCroppedCanvas({ width: 256, height: 256 });
+      const b64 = canvas.toDataURL('image/jpeg', 0.85);
+      _closeCropModal();
+      // Update preview
+      const circle = $('settingsAvatarCircle');
+      const imgEl  = $('settingsAvatarImg');
+      if (circle) circle.textContent = '';
+      if (imgEl)  { imgEl.src = b64; imgEl.hidden = false; }
+      // Save to server
+      const r = await fetch('/api/me/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ avatar_b64: b64 }),
+      });
+      setStatus($('profileStatus'), r.ok ? '头像已更新' : '头像上传失败', r.ok ? 'success' : 'error');
+      if (r.ok) {
+        const sa = $('sidebarUserAvatar');
+        if (sa) sa.innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;        
+        const _cu = getCurrentUser();
+        if (_cu) { _cu.avatar_b64 = b64; localStorage.setItem(AUTH_USER_KEY, JSON.stringify(_cu)); }
+      }
+    });
+  }
+
+  if ($('btnRemoveAvatar')) {
+    $('btnRemoveAvatar').addEventListener('click', async () => {
+      const r = await fetch('/api/me/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ avatar_b64: '' }),
+      });
+      if (r.ok) {
+        const circle = $('settingsAvatarCircle');
+        const imgEl  = $('settingsAvatarImg');
+        const u = getCurrentUser();
+        const _label = u?.display_name || u?.username || 'A';
+        if (circle) circle.textContent = _label[0].toUpperCase();
+        if (imgEl)  { imgEl.src = ''; imgEl.hidden = true; }
+        const sa = $('sidebarUserAvatar');
+        if (sa) sa.textContent = _label[0].toUpperCase();
+        if (u) { u.avatar_b64 = ''; localStorage.setItem(AUTH_USER_KEY, JSON.stringify(u)); }
+      }
+      setStatus($('profileStatus'), r.ok ? '头像已移除' : '操作失败', r.ok ? 'success' : 'error');
+    });
+  }
+
+  // ── Profile: save display_name + bio ────────────────────────────────
+  if ($('btnSaveProfile')) {
+    $('btnSaveProfile').addEventListener('click', async () => {
+      const r = await fetch('/api/me/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
+          display_name: $('settingsDisplayName').value.trim(),
+          bio: $('settingsBio').value.trim(),
+        }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        const cu = getCurrentUser();
+        if (cu) {
+          cu.display_name = $('settingsDisplayName').value.trim();
+          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu));
+          updateAuthBar();
+        }
+      }
+      setStatus($('profileStatus'), r.ok ? '保存成功' : (d.detail || '保存失败'), r.ok ? 'success' : 'error');
+    });
+  }
+
+  // ── Profile: change username ─────────────────────────────────────────
+  if ($('btnSaveUsername')) {
+    $('btnSaveUsername').addEventListener('click', async () => {
+      const newUsername = ($('settingsNewUsername') && $('settingsNewUsername').value.trim()) || '';
+      const curPass     = ($('settingsUsernamePass') && $('settingsUsernamePass').value) || '';
+      if (!newUsername || !curPass) {
+        setStatus($('usernameStatus'), '请填写新用户名和当前密码', 'error'); return;
+      }
+      const r = await fetch('/api/me/username', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ new_username: newUsername, current_password: curPass }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setStatus($('usernameStatus'), '用户名已修改', 'success');
+        const cu = getCurrentUser();
+        if (cu) { cu.username = newUsername; localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu)); updateAuthBar(); }
+        if ($('settingsNewUsername'))   $('settingsNewUsername').value   = '';
+        if ($('settingsUsernamePass'))  $('settingsUsernamePass').value  = '';
+      } else {
+        setStatus($('usernameStatus'), d.detail || '修改失败', 'error');
+      }
+    });
+  }
+
+  // ── Security: change password ────────────────────────────────────────
+  if ($('btnSavePassword')) {
+    $('btnSavePassword').addEventListener('click', async () => {
+      const oldP  = ($('settingsOldPass')     && $('settingsOldPass').value)     || '';
+      const newP  = ($('settingsNewPass')     && $('settingsNewPass').value)     || '';
+      const confP = ($('settingsConfirmPass') && $('settingsConfirmPass').value) || '';
+      if (!oldP || !newP || !confP) { setStatus($('passwordStatus'), '请填写所有密码字段', 'error'); return; }
+      if (newP !== confP) { setStatus($('passwordStatus'), '两次输入的新密码不一致', 'error'); return; }
+      if (newP.length < 6) { setStatus($('passwordStatus'), '新密码至少6位', 'error'); return; }
+      const r = await fetch('/api/me/password', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ old_password: oldP, new_password: newP }),
+      });
+      const d = await r.json();
+      setStatus($('passwordStatus'), r.ok ? '密码已修改' : (d.detail || '修改失败'), r.ok ? 'success' : 'error');
+      if (r.ok) {
+        if ($('settingsOldPass'))     $('settingsOldPass').value     = '';
+        if ($('settingsNewPass'))     $('settingsNewPass').value     = '';
+        if ($('settingsConfirmPass')) $('settingsConfirmPass').value = '';
+      }
+    });
+  }
+
+  // ── Privacy: deactivate account ──────────────────────────────────────
+  if ($('btnDeactivateAccount')) {
+    $('btnDeactivateAccount').addEventListener('click', async () => {
+      if (!confirm('此操作不可恢复，确认注销账号吗？\n注销后将自动退出登录。')) return;
+      const r = await fetch('/api/me', { method: 'DELETE', headers: authHeaders() });
+      if (r.ok) { alert('账号已注销'); clearAuth(); }
+      else {
+        const d = await r.json();
+        setStatus($('privacyStatus'), d.detail || '注销失败', 'error');
+      }
+    });
+  }
+
+  // ── Privacy: clear history ───────────────────────────────────────────
+  if ($('btnClearHistory')) {
+    $('btnClearHistory').addEventListener('click', async () => {
+      if (!confirm('确定要清除所有检测历史吗？此操作不可恢复。')) return;
+      const r = await fetch('/api/me/history', { method: 'DELETE', headers: authHeaders() });
+      setStatus($('privacyStatus'), r.ok ? '历史记录已清除' : '清除失败', r.ok ? 'success' : 'error');
+      if (r.ok) {
+        if ($('statTotal'))           $('statTotal').textContent           = '0';
+        if ($('statReal'))            $('statReal').textContent            = '0';
+        if ($('statFake'))            $('statFake').textContent            = '0';
+        if ($('settingsDetectionCount')) $('settingsDetectionCount').textContent = '0';
+      }
+    });
+  }
+
+  // ── Privacy: export CSV ──────────────────────────────────────────────
+  if ($('btnExportHistory')) {
+    $('btnExportHistory').addEventListener('click', async () => {
+      const r = await fetch('/api/history?page_size=1000', { headers: authHeaders() });
+      if (!r.ok) { setStatus($('privacyStatus'), '导出失败', 'error'); return; }
+      const d = await r.json();
+      const rows = [['ID', '图片URL', '结果', '置信度', '时间']].concat(
+        (d.records || []).map(rec => [rec.id, rec.image_url || '', rec.label || '', rec.confidence || 0, rec.created_at || ''])
+      );
+      const csv = rows.map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'aigi_detection_history.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
+
+  // ── Prefs: save to localStorage ─────────────────────────────────────
+  if ($('btnSavePrefs')) {
+    $('btnSavePrefs').addEventListener('click', () => {
+      if ($('prefHistoryEnabled')) localStorage.setItem('aigi_history_sync',     $('prefHistoryEnabled').checked ? 'true' : 'false');
+      if ($('prefAutoHeatmap'))    localStorage.setItem('aigi_heatmap_auto',     $('prefAutoHeatmap').checked    ? 'true' : 'false');
+      if ($('prefLightTheme'))     localStorage.setItem('aigi_dark_theme',       $('prefLightTheme').checked     ? 'true' : 'false');
+      if ($('prefAiTemplate'))     localStorage.setItem('aigi_default_question', $('prefAiTemplate').value);
+      // Apply dark theme immediately
+      if ($('prefLightTheme')) document.body.classList.toggle('dark-theme', $('prefLightTheme').checked);
+      setStatus($('prefsStatus'), '偏好已保存', 'success');
+    });
+  }
+
+  // Apply saved dark theme on page load
+  if (localStorage.getItem('aigi_dark_theme') === 'true') {
+    document.body.classList.add('dark-theme');
+  }
+})();
+
+/* ── 隐私政策弹窗（全局函数，供 onclick 属性调用） ── */
+function openPrivacyModal(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  var m = document.getElementById('privacyPolicyModal');
+  if (m) { m.classList.add('open'); document.body.style.overflow = 'hidden'; }
+}
+function closePrivacyModal() {
+  var m = document.getElementById('privacyPolicyModal');
+  if (m) { m.classList.remove('open'); document.body.style.overflow = ''; }
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePrivacyModal(); });

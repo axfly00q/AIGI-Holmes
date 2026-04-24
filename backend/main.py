@@ -23,7 +23,7 @@ from backend.cache import close_redis
 from backend.database import Base, engine
 from backend.exceptions import register_exception_handlers
 from backend.models.feedback import FeedbackRecord as _FeedbackRecord  # noqa: F401 — registers table
-from backend.routers import auth, detect, report, admin, ws, feedback, history, search, text_detect
+from backend.routers import auth, detect, report, admin, ws, feedback, history, search, text_detect, profile
 from backend.clip_classify import _load_clip
 
 logger = logging.getLogger(__name__)
@@ -92,10 +92,12 @@ app.include_router(feedback.router)
 app.include_router(history.router)
 app.include_router(search.router)
 app.include_router(text_detect.router)
+app.include_router(profile.router)
 
 # Static files & templates
 _static_dir = os.path.join(BASE_DIR, "static")
 _template_dir = os.path.join(BASE_DIR, "templates")
+_docs_dir = os.path.join(BASE_DIR, "static", "docs")
 
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")

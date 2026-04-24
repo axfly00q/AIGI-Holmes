@@ -4,8 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIGI-Holmes 新闻图片真实性检测</title>
+  <link rel="icon" type="image/png" href="/static/logo.png" />
     <link rel="stylesheet" href="/static/css/style.css?v={{ cache_bust }}" />
     <link rel="stylesheet" href="/static/css/ui-redesign.css?v={{ cache_bust }}" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css" />
 </head>
 <body>
 
@@ -15,9 +17,7 @@
     <aside class="sidebar">
       <div class="sidebar-brand">
         <span class="sidebar-logo">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
+          <img src="/static/logo.png" width="32" height="32" alt="AIGI-Holmes Logo" style="border-radius:6px;object-fit:contain;" />
         </span>
         <div>
           <h1 class="sidebar-title">AIGI-Holmes</h1>
@@ -72,6 +72,13 @@
               </div>
             </div>
             <div class="sidebar-user-actions" style="justify-content: stretch; gap: 4px;">
+              <button class="btn-secondary btn-sm" id="btnShowSettings" style="flex: 1;" title="个人设置">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
+                  <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                设置
+              </button>
               <button class="btn-secondary btn-sm" id="btnShowRole" style="flex: 1;">管理</button>
               <button class="btn-secondary btn-sm" id="btnLogout" style="flex: 1;">退出</button>
             </div>
@@ -740,13 +747,25 @@
       <div id="loginForm">
         <input class="url-input" id="loginUser" placeholder="用户名" autocomplete="username" />
         <input class="url-input" id="loginPass" type="password" placeholder="密码" autocomplete="current-password" />
-        <button class="btn-detect" id="btnLogin">登录</button>
+        <label class="privacy-checkbox-row">
+          <input type="checkbox" id="loginPrivacyAgree" />
+          <span>我已阅读并同意
+            <a href="javascript:void(0)" onclick="openPrivacyModal(event)" class="privacy-link">《AIGI-Holmes 隐私政策》</a>
+          </span>
+        </label>
+        <button class="btn-detect" id="btnLogin" disabled>登录</button>
         <p class="status-msg" id="loginStatus"></p>
       </div>
       <div id="registerForm" hidden>
         <input class="url-input" id="regUser" placeholder="用户名（至少 3 位）" autocomplete="username" />
         <input class="url-input" id="regPass" type="password" placeholder="密码（至少 6 位）" autocomplete="new-password" />
-        <button class="btn-detect" id="btnRegister">注册</button>
+        <label class="privacy-checkbox-row">
+          <input type="checkbox" id="regPrivacyAgree" />
+          <span>我已阅读并同意
+            <a href="javascript:void(0)" onclick="openPrivacyModal(event)" class="privacy-link">《AIGI-Holmes 隐私政策》</a>
+          </span>
+        </label>
+        <button class="btn-detect" id="btnRegister" disabled>注册</button>
         <p class="status-msg" id="registerStatus"></p>
       </div>
     </div>
@@ -829,8 +848,339 @@
     </div>
   </div>
 
+  <!-- ── 设置弹窗 ──────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="settingsModal" hidden>
+    <div class="modal settings-modal">
+      <button class="modal-close" id="btnSettingsClose">&times;</button>
+      <h2 class="settings-modal-title">账号设置</h2>
+
+      <!-- Tab navigation -->
+      <div class="settings-tabs-row">
+        <button class="settings-tab-btn active" data-stab="profile">个人资料</button>
+        <button class="settings-tab-btn" data-stab="prefs">偏好设置</button>
+        <button class="settings-tab-btn" data-stab="privacy">隐私与数据</button>
+      </div>
+      <div class="settings-tabs-row settings-tabs-row--last">
+        <button class="settings-tab-btn" data-stab="security">安全</button>
+        <button class="settings-tab-btn" data-stab="about">关于</button>
+      </div>
+
+      <!-- ── 个人资料 ── -->
+      <div class="settings-pane active" id="settings-profile">
+        <!-- Avatar -->
+        <div class="settings-avatar-section">
+          <div class="settings-avatar-wrap">
+            <div class="settings-avatar-circle" id="settingsAvatarCircle">A</div>
+            <img class="settings-avatar-img" id="settingsAvatarImg" alt="头像" hidden />
+          </div>
+          <div class="settings-avatar-actions">
+            <label class="btn-secondary btn-sm" for="avatarInput" style="cursor:pointer;">更换头像</label>
+            <input type="file" id="avatarInput" accept="image/*" hidden />
+            <button class="btn-secondary btn-sm" id="btnRemoveAvatar">移除头像</button>
+            <p class="settings-hint">JPG / PNG，建议正方形，最大 500 KB</p>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label class="settings-label">显示昵称</label>
+          <input class="url-input" id="settingsDisplayName" placeholder="留空则显示用户名" maxlength="64" autocomplete="off" />
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">个性签名</label>
+          <input class="url-input" id="settingsBio" placeholder="一句话介绍自己（最多 100 字）" maxlength="200" autocomplete="off" />
+        </div>
+        <button class="btn-detect" id="btnSaveProfile">保存个人资料</button>
+        <p class="status-msg" id="profileStatus"></p>
+
+        <hr class="settings-divider" />
+        <h4 class="settings-section-title">修改用户名</h4>
+        <div class="settings-field">
+          <label class="settings-label">新用户名</label>
+          <input class="url-input" id="settingsNewUsername" placeholder="至少 3 位" maxlength="64" autocomplete="off" />
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">当前密码确认</label>
+          <input class="url-input" id="settingsUsernamePass" type="password" placeholder="输入当前密码确认身份" autocomplete="current-password" />
+        </div>
+        <button class="btn-detect" id="btnSaveUsername">修改用户名</button>
+        <p class="status-msg" id="usernameStatus"></p>
+
+        <hr class="settings-divider" />
+        <h4 class="settings-section-title">账号信息</h4>
+        <div class="settings-info-grid">
+          <div class="settings-info-item">
+            <span class="settings-info-label">用户 ID</span>
+            <span class="settings-info-value" id="settingsUserId">—</span>
+          </div>
+          <div class="settings-info-item">
+            <span class="settings-info-label">当前角色</span>
+            <span class="settings-info-value" id="settingsUserRole">—</span>
+          </div>
+          <div class="settings-info-item">
+            <span class="settings-info-label">注册时间</span>
+            <span class="settings-info-value" id="settingsCreatedAt">—</span>
+          </div>
+          <div class="settings-info-item">
+            <span class="settings-info-label">累计检测</span>
+            <span class="settings-info-value" id="settingsDetectionCount">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 偏好设置 ── -->
+      <div class="settings-pane" id="settings-prefs">
+        <div class="settings-toggle-row">
+          <div>
+            <div class="settings-toggle-label">保存检测历史</div>
+            <div class="settings-toggle-hint">关闭后，检测结果不会上传到服务器</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prefHistoryEnabled" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-toggle-row">
+          <div>
+            <div class="settings-toggle-label">检测完成后自动显示热力图</div>
+            <div class="settings-toggle-hint">自动叠加 Grad-CAM 热力图（仅图片上传检测）</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prefAutoHeatmap" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-toggle-row">
+          <div>
+            <div class="settings-toggle-label">深色模式</div>
+            <div class="settings-toggle-hint">切换为深色界面（默认为浅色）</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prefLightTheme" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <hr class="settings-divider" />
+        <div class="settings-field">
+          <label class="settings-label">AI 分析默认提问模板</label>
+          <textarea class="settings-textarea" id="prefAiTemplate" rows="3" maxlength="500"
+            placeholder="例如：这张图片哪些特征表明它是 AI 生成的？"></textarea>
+          <p class="settings-hint">检测完成后自动填入「AI 智能分析」输入框</p>
+        </div>
+        <button class="btn-detect" id="btnSavePrefs">保存偏好设置</button>
+        <p class="status-msg" id="prefsStatus"></p>
+      </div>
+
+      <!-- ── 隐私与数据 ── -->
+      <div class="settings-pane" id="settings-privacy">
+        <!-- Stats -->
+        <div class="settings-stats-row" id="settingsHistoryStats">
+          <div class="settings-stat-card">
+            <span class="settings-stat-num" id="statTotal">—</span>
+            <span class="settings-stat-label">总检测次数</span>
+          </div>
+          <div class="settings-stat-card">
+            <span class="settings-stat-num real" id="statReal">—</span>
+            <span class="settings-stat-label">判定为真实</span>
+          </div>
+          <div class="settings-stat-card">
+            <span class="settings-stat-num fake" id="statFake">—</span>
+            <span class="settings-stat-label">判定为 AI 生成</span>
+          </div>
+        </div>
+
+        <!-- Export -->
+        <div class="settings-action-row">
+          <div>
+            <div class="settings-toggle-label">导出我的检测数据</div>
+            <div class="settings-toggle-hint">将全部检测记录下载为 CSV 文件</div>
+          </div>
+          <button class="btn-secondary" id="btnExportHistory">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            导出 CSV
+          </button>
+        </div>
+
+        <!-- Privacy policy -->
+        <div class="settings-action-row">
+          <div>
+            <div class="settings-toggle-label">隐私政策与用户协议</div>
+            <div class="settings-toggle-hint" id="settingsPrivacyDate">查看平台隐私政策文件</div>
+          </div>
+          <button onclick="openPrivacyModal(event)" class="btn-secondary" style="cursor:pointer;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+            </svg>
+            查看政策
+          </button>
+        </div>
+
+        <hr class="settings-divider" />
+
+        <!-- Clear history -->
+        <div class="settings-action-row settings-danger-row">
+          <div>
+            <div class="settings-toggle-label settings-danger-label">清除我的检测历史</div>
+            <div class="settings-toggle-hint">删除服务器上全部检测记录，<strong>不可恢复</strong></div>
+          </div>
+          <button class="btn-danger-outline" id="btnClearHistory">清除历史</button>
+        </div>
+
+        <!-- Deactivate account -->
+        <div class="settings-action-row settings-danger-row">
+          <div>
+            <div class="settings-toggle-label settings-danger-label">注销账号</div>
+            <div class="settings-toggle-hint">停用账号后将无法登录，如需恢复请联系管理员</div>
+          </div>
+          <button class="btn-danger-outline" id="btnDeactivateAccount">注销账号</button>
+        </div>
+
+        <p class="status-msg" id="privacyStatus"></p>
+      </div>
+
+      <!-- ── 安全 ── -->
+      <div class="settings-pane" id="settings-security">
+        <h4 class="settings-section-title">修改密码</h4>
+        <div class="settings-field">
+          <label class="settings-label">原密码</label>
+          <input class="url-input" id="settingsOldPass" type="password" placeholder="当前密码" autocomplete="current-password" />
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">新密码</label>
+          <input class="url-input" id="settingsNewPass" type="password" placeholder="至少 6 位" autocomplete="new-password" />
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">确认新密码</label>
+          <input class="url-input" id="settingsConfirmPass" type="password" placeholder="再次输入新密码" autocomplete="new-password" />
+        </div>
+        <button class="btn-detect" id="btnSavePassword">修改密码</button>
+        <p class="status-msg" id="passwordStatus"></p>
+      </div>
+
+      <!-- ── 关于 ── -->
+      <div class="settings-pane" id="settings-about">
+        <div class="settings-about-card">
+          <img src="/static/logo.png" width="56" height="56" alt="AIGI-Holmes Logo"
+               style="border-radius:12px;object-fit:contain;margin-bottom:10px;" />
+          <h3 class="settings-about-name">AIGI-Holmes</h3>
+          <p class="settings-about-sub">新闻图片 AI 生成检测平台</p>
+          <div class="settings-info-grid" style="margin-top:16px;">
+            <div class="settings-info-item">
+              <span class="settings-info-label">平台版本</span>
+              <span class="settings-info-value">v2.0.0</span>
+            </div>
+            <div class="settings-info-item">
+              <span class="settings-info-label">检测模型</span>
+              <span class="settings-info-value">ResNet50-finetuned</span>
+            </div>
+            <div class="settings-info-item">
+              <span class="settings-info-label">模型任务</span>
+              <span class="settings-info-value">二分类 (FAKE / REAL)</span>
+            </div>
+            <div class="settings-info-item">
+              <span class="settings-info-label">可解释方法</span>
+              <span class="settings-info-value">Grad-CAM · LIME · SHAP</span>
+            </div>
+            <div class="settings-info-item">
+              <span class="settings-info-label">CLIP 辅助</span>
+              <span class="settings-info-value">ViT-B/32 场景分类</span>
+            </div>
+            <div class="settings-info-item">
+              <span class="settings-info-label">后端框架</span>
+              <span class="settings-info-value">FastAPI + SQLite</span>
+            </div>
+          </div>
+          <a href="javascript:void(0)" onclick="openPrivacyModal(event)" class="settings-doc-link" style="margin-top:16px;display:inline-block;cursor:pointer;">
+            隐私政策 &amp; 用户协议 →
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /#settingsModal -->
+
+  <!-- ── 头像裁剪弹层 ────────────────────────────────────────── -->
+  <div class="crop-modal-overlay" id="cropModalOverlay" hidden>
+    <div class="crop-modal-box">
+      <p class="crop-modal-title">裁剪头像</p>
+      <div class="crop-img-wrap">
+        <img id="cropSource" src="" alt="" />
+      </div>
+      <div class="crop-actions">
+        <button class="btn-secondary" id="btnCropCancel">取消</button>
+        <button class="btn-detect" id="btnCropConfirm">确认裁剪</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 隐私政策弹窗 ───────────────────────────────────── -->
+  <div id="privacyPolicyModal" class="pp-overlay" onclick="if(event.target===this)closePrivacyModal()">
+    <div class="pp-box">
+      <div class="pp-header">
+        <h2 class="pp-title">AIGI-Holmes 隐私政策</h2>
+        <button class="pp-close" onclick="closePrivacyModal()" aria-label="关闭">&times;</button>
+      </div>
+      <div class="pp-body">
+        <p class="pp-update">最后更新：2025 年 4 月</p>
+        <h3>一、概述</h3>
+        <p>AIGI-Holmes（以下简称「本平台」）是面向新闻图片真实性检测的 AI 分析系统。本平台高度重视用户隐私，本政策旨在说明我们如何收集、使用和保护您的个人信息。</p>
+        <h3>二、信息收集</h3>
+        <ul>
+          <li><strong>账号信息：</strong>注册时收集用户名和经 bcrypt 加密的密码哈希值，不存储明文密码。</li>
+          <li><strong>检测数据：</strong>用户上传的图片及新闻 URL，仅用于本次检测分析，不对外分享。</li>
+          <li><strong>使用日志：</strong>检测时间、检测结果等操作日志，用于统计分析和服务改进。</li>
+          <li><strong>设备信息：</strong>访问 IP 地址、浏览器类型，用于安全防护。</li>
+        </ul>
+        <h3>三、信息使用</h3>
+        <ul>
+          <li>提供图片真实性检测服务</li>
+          <li>保存检测历史（可在「偏好设置」中关闭，或在「隐私与数据」中清除）</li>
+          <li>改善平台检测精度和用户体验</li>
+          <li>安全防护与异常行为检测</li>
+        </ul>
+        <h3>四、数据存储</h3>
+        <ul>
+          <li>所有数据存储于本地 SQLite 数据库，不上传至云端。</li>
+          <li>密码经过 bcrypt 加密，不存储明文。</li>
+          <li>上传图片仅在检测期间临时处理，不长期存储图片文件。</li>
+          <li>用户可在「隐私与数据」设置中导出（CSV）或永久删除检测记录。</li>
+        </ul>
+        <h3>五、信息共享</h3>
+        <p>本平台不会将个人信息出售、出租或分享给第三方，以下情况除外：法律法规明确要求；获得用户明确同意。</p>
+        <h3>六、用户权利</h3>
+        <ul>
+          <li>查看个人账号信息与检测历史</li>
+          <li>修改用户名、密码及个人资料（昵称、头像、签名）</li>
+          <li>导出全部检测历史数据（CSV 格式）</li>
+          <li>清除服务器上所有检测记录</li>
+          <li>注销账号（如需恢复请联系管理员）</li>
+        </ul>
+        <h3>七、本地存储</h3>
+        <p>本平台使用浏览器 localStorage 保存登录凭证（JWT Token）和用户偏好设置，不使用第三方追踪 Cookie。</p>
+        <h3>八、AI 模型说明</h3>
+        <ul>
+          <li>核心检测使用本地部署的微调 ResNet-50 模型（二分类：FAKE / REAL）。</li>
+          <li>辅助使用 CLIP（ViT-B/32）进行场景分类。</li>
+          <li>可解释性分析使用 Grad-CAM、LIME、SHAP 方法，结果仅供参考。</li>
+          <li>所有分析在本地服务器完成，<strong>不向任何外部 AI 服务发送用户数据</strong>。</li>
+        </ul>
+        <h3>九、免责声明</h3>
+        <p>检测结果基于统计模型，存在误判可能，不能作为鉴定图片真伪的唯一依据，不构成法律证据。</p>
+        <h3>十、政策更新</h3>
+        <p>本平台保留更新本政策的权利，重大变更将在平台内公告。继续使用即视为接受更新内容。</p>
+        <h3>十一、联系我们</h3>
+        <p>如有疑问，请通过管理员账号联系平台运营方。</p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
   <script src="/static/js/app.js?v={{ cache_bust }}"></script>
 </body>
 </html>

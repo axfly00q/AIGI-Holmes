@@ -383,6 +383,35 @@ html, body {
   margin-top: 1px;
 }
 
+/* 隐私勾选框 */
+.lp-privacy-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.lp-privacy-row input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: #38bdf8;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+.lp-privacy-row label {
+  cursor: pointer;
+  flex: 1;
+}
+.lp-privacy-link {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+.lp-privacy-link:hover { color: #7dd3fc; }
+
 /* 面板底部提示 */
 .lp-panel-footer {
   margin-top: 24px;
@@ -446,3 +475,58 @@ html, body {
     padding: 0 20px 60px;
   }
 }
+
+/* ── 隐私政策弹窗 pp-* (landing 页深色风格) ─────────────── */
+.pp-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0,0,0,0.72);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.pp-overlay.open { display: flex; }
+.pp-box {
+  background: #1a2744;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  overflow: hidden;
+  border: 1px solid rgba(56,189,248,0.12);
+}
+.pp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid rgba(56,189,248,0.1);
+  flex-shrink: 0;
+}
+.pp-title { font-size: 1rem; font-weight: 700; color: #e2e8f0; margin: 0; }
+.pp-close {
+  background: none; border: none; font-size: 22px; line-height: 1;
+  color: #64748b; cursor: pointer; padding: 2px 8px; border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.pp-close:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+.pp-body {
+  padding: 20px 24px 28px;
+  overflow-y: auto;
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #94a3b8;
+}
+.pp-update { font-size: 11px; color: #475569; margin: 0 0 20px; }
+.pp-body h3 { font-size: 13px; font-weight: 700; color: #e2e8f0; margin: 20px 0 8px; }
+.pp-body h3:first-of-type { margin-top: 0; }
+.pp-body p { margin: 0 0 8px; }
+.pp-body ul { margin: 0 0 8px; padding-left: 20px; }
+.pp-body ul li { margin-bottom: 4px; }
+.pp-body strong { color: #e2e8f0; font-weight: 600; }

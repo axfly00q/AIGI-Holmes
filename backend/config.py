@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ADMIN_ROLE_PASSWORD: str = "aigi"
 
     # Model
     MODEL_PATH: str = os.path.join(

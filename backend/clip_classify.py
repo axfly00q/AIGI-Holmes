@@ -7,6 +7,7 @@ Falls back to "其他" gracefully if the model cannot be loaded (offline / no CL
 """
 
 import logging
+import os
 
 logger = logging.getLogger("backend.clip_classify")
 
@@ -37,7 +38,15 @@ def _load_clip() -> None:
 
         _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info("Loading CLIP ViT-B/32 on %s...", _device)
-        _clip_model, _clip_preprocess = clip.load("ViT-B/32", device=_device)
+        # When running as a PyInstaller frozen EXE, load from the bundled
+        # models directory (clip_models/) instead of downloading from the network.
+        import sys as _sys
+        _download_root = (
+            os.path.join(_sys._MEIPASS, "clip_models")
+            if getattr(_sys, "frozen", False)
+            else None  # development: use default ~/.cache/clip
+        )
+        _clip_model, _clip_preprocess = clip.load("ViT-B/32", device=_device, download_root=_download_root)
         _clip_model.eval()
 
         # Pre-encode all text prompts once; reuse for every image
