@@ -154,6 +154,7 @@
                   <div class="progress-track">
                     <div class="progress-bar" id="confBar"></div>
                   </div>
+                  <p id="confThreshWarn" class="settings-hint" style="color:#f59e0b;margin-top:4px;" hidden>⚠ 置信度偏低，结果仅供参考</p>
                 </div>
                 <div class="prob-section">
                   <p class="prob-title">各类别概率</p>
@@ -848,22 +849,35 @@
     </div>
   </div>
 
-  <!-- ── 设置弹窗 ──────────────────────────────────────────────── -->
-  <div class="modal-overlay" id="settingsModal" hidden>
-    <div class="modal settings-modal">
-      <button class="modal-close" id="btnSettingsClose">&times;</button>
-      <h2 class="settings-modal-title">账号设置</h2>
+  <!-- ── 设置全屏覆盖层 ──────────────────────────────────────────── -->
+  <div class="settings-fullscreen" id="settingsModal" hidden>
 
-      <!-- Tab navigation -->
-      <div class="settings-tabs-row">
-        <button class="settings-tab-btn active" data-stab="profile">个人资料</button>
-        <button class="settings-tab-btn" data-stab="prefs">偏好设置</button>
-        <button class="settings-tab-btn" data-stab="privacy">隐私与数据</button>
-      </div>
-      <div class="settings-tabs-row settings-tabs-row--last">
-        <button class="settings-tab-btn" data-stab="security">安全</button>
-        <button class="settings-tab-btn" data-stab="about">关于</button>
-      </div>
+    <!-- 左侧导航栏 -->
+    <div class="settings-fs-sidebar">
+      <div class="settings-fs-brand">账号设置</div>
+      <nav class="settings-fs-nav">
+        <button class="settings-tab-btn active" data-stab="profile">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          个人资料
+        </button>
+        <button class="settings-tab-btn" data-stab="prefs">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          偏好设置
+        </button>
+        <button class="settings-tab-btn" data-stab="privacy">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          隐私与数据
+        </button>
+        <button class="settings-tab-btn" data-stab="about">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          关于
+        </button>
+      </nav>
+    </div>
+
+    <!-- 右侧内容区 -->
+    <div class="settings-fs-body">
+      <button class="settings-fs-close" id="btnSettingsClose">&times;</button>
 
       <!-- ── 个人资料 ── -->
       <div class="settings-pane active" id="settings-profile">
@@ -882,8 +896,8 @@
         </div>
 
         <div class="settings-field">
-          <label class="settings-label">显示昵称</label>
-          <input class="url-input" id="settingsDisplayName" placeholder="留空则显示用户名" maxlength="64" autocomplete="off" />
+          <label class="settings-label">用户名</label>
+          <input class="url-input" id="settingsDisplayName" placeholder="你的用户名" maxlength="64" autocomplete="off" />
         </div>
         <div class="settings-field">
           <label class="settings-label">个性签名</label>
@@ -893,17 +907,21 @@
         <p class="status-msg" id="profileStatus"></p>
 
         <hr class="settings-divider" />
-        <h4 class="settings-section-title">修改用户名</h4>
+        <h4 class="settings-section-title">修改密码</h4>
         <div class="settings-field">
-          <label class="settings-label">新用户名</label>
-          <input class="url-input" id="settingsNewUsername" placeholder="至少 3 位" maxlength="64" autocomplete="off" />
+          <label class="settings-label">原密码</label>
+          <input class="url-input" id="settingsOldPass" type="password" placeholder="当前密码" autocomplete="current-password" />
         </div>
         <div class="settings-field">
-          <label class="settings-label">当前密码确认</label>
-          <input class="url-input" id="settingsUsernamePass" type="password" placeholder="输入当前密码确认身份" autocomplete="current-password" />
+          <label class="settings-label">新密码</label>
+          <input class="url-input" id="settingsNewPass" type="password" placeholder="至少 6 位" autocomplete="new-password" />
         </div>
-        <button class="btn-detect" id="btnSaveUsername">修改用户名</button>
-        <p class="status-msg" id="usernameStatus"></p>
+        <div class="settings-field">
+          <label class="settings-label">确认新密码</label>
+          <input class="url-input" id="settingsConfirmPass" type="password" placeholder="再次输入新密码" autocomplete="new-password" />
+        </div>
+        <button class="btn-detect" id="btnSavePassword">修改密码</button>
+        <p class="status-msg" id="passwordStatus"></p>
 
         <hr class="settings-divider" />
         <h4 class="settings-section-title">账号信息</h4>
@@ -953,6 +971,17 @@
 
         <div class="settings-toggle-row">
           <div>
+            <div class="settings-toggle-label">检测完成桌面通知</div>
+            <div class="settings-toggle-hint">检测完成后弹出系统通知（需授权）</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prefNotify" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-toggle-row">
+          <div>
             <div class="settings-toggle-label">深色模式</div>
             <div class="settings-toggle-hint">切换为深色界面（默认为浅色）</div>
           </div>
@@ -960,6 +989,13 @@
             <input type="checkbox" id="prefLightTheme" />
             <span class="toggle-slider"></span>
           </label>
+        </div>
+
+        <hr class="settings-divider" />
+        <div class="settings-field">
+          <label class="settings-label">低置信度警示阈值（%）</label>
+          <input class="url-input" type="number" id="prefConfThreshold" min="50" max="95" value="60" style="width:100px;" />
+          <p class="settings-hint">置信度低于此值时在结果区显示"置信度偏低"提示</p>
         </div>
 
         <hr class="settings-divider" />
@@ -1042,25 +1078,6 @@
         <p class="status-msg" id="privacyStatus"></p>
       </div>
 
-      <!-- ── 安全 ── -->
-      <div class="settings-pane" id="settings-security">
-        <h4 class="settings-section-title">修改密码</h4>
-        <div class="settings-field">
-          <label class="settings-label">原密码</label>
-          <input class="url-input" id="settingsOldPass" type="password" placeholder="当前密码" autocomplete="current-password" />
-        </div>
-        <div class="settings-field">
-          <label class="settings-label">新密码</label>
-          <input class="url-input" id="settingsNewPass" type="password" placeholder="至少 6 位" autocomplete="new-password" />
-        </div>
-        <div class="settings-field">
-          <label class="settings-label">确认新密码</label>
-          <input class="url-input" id="settingsConfirmPass" type="password" placeholder="再次输入新密码" autocomplete="new-password" />
-        </div>
-        <button class="btn-detect" id="btnSavePassword">修改密码</button>
-        <p class="status-msg" id="passwordStatus"></p>
-      </div>
-
       <!-- ── 关于 ── -->
       <div class="settings-pane" id="settings-about">
         <div class="settings-about-card">
@@ -1100,7 +1117,7 @@
         </div>
       </div>
 
-    </div>
+    </div><!-- /.settings-fs-body -->
   </div><!-- /#settingsModal -->
 
   <!-- ── 头像裁剪弹层 ────────────────────────────────────────── -->

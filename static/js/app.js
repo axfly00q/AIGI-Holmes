@@ -213,7 +213,24 @@ if ($('loginPrivacyAgree')) {
 $('loginPass').addEventListener('keydown',   e => { if (e.key === 'Enter') $('btnLogin').click(); });
 $('regPass').addEventListener('keydown',     e => { if (e.key === 'Enter') $('btnRegister').click(); });
 
-refreshAuthSession();
+refreshAuthSession().then(() => {
+  // 页面加载后拉取最新 profile，把头像/昵称同步到 localStorage 以确保侧边栏显示正确
+  if (getToken()) {
+    fetch('/api/me', { headers: authHeaders() }).then(r => {
+      if (!r.ok) return;
+      return r.json();
+    }).then(d => {
+      if (!d) return;
+      const cu = getCurrentUser();
+      if (cu) {
+        cu.display_name = d.display_name || '';
+        cu.avatar_b64   = d.avatar_b64   || '';
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu));
+        updateAuthBar();
+      }
+    }).catch(() => {});
+  }
+});
 
 function openRoleModal() {
   $('roleStep1').hidden  = false;
@@ -471,10 +488,23 @@ function renderResult(data) {
     es.removeAttribute('open'); // collapsed by default; user can click to expand
   }else if(es){ es.hidden = true; }
   const cam = $('camOverlay');
-  if(data.cam_image){cam.src=data.cam_image;$('btnCamToggle').hidden=false;}
-  else{cam.src='';$('btnCamToggle').hidden=true;}
+  if(data.cam_image){
+    cam.src = data.cam_image;
+    const btnCam = $('btnCamToggle');
+    btnCam.hidden = false;
+    const autoHeat = localStorage.getItem('aigi_heatmap_auto') === 'true';
+    cam.classList.toggle('visible', autoHeat);
+    btnCam.classList.toggle('active', autoHeat);
+    btnCam.textContent = autoHeat ? '原图' : '热力图';
+  } else { cam.src=''; $('btnCamToggle').hidden=true; }
   $('resultEmpty').style.display='none';
   $('resultCard').style.display='flex';
+  // 置信度阈值警告
+  const confWarn = $('confThreshWarn');
+  if (confWarn) {
+    const threshold = parseInt(localStorage.getItem('aigi_conf_threshold') || '60', 10);
+    confWarn.hidden = data.confidence >= threshold;
+  }
   const rp=document.querySelector('.result-panel');
   if(rp){rp.style.alignItems='flex-start';rp.style.justifyContent='flex-start';}
 }
@@ -496,6 +526,13 @@ btnDetect.addEventListener('click', async ()=>{
       lastDetectionId = data.detection_id || null;
       lastDetectionLabel = data.label || '';
       setStatus(uploadStatus,'检测完成','success');
+      // 浏览器通知
+      if (localStorage.getItem('aigi_notify') === 'true' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('AIGI-Holmes 检测完成', {
+          body: `结果：${data.label_zh}（置信度 ${Math.round(data.confidence)}%）`,
+          icon: '/static/logo.png'
+        });
+      }
       const rd=$('reportDownload');
       if(data.detection_id&&getToken()){
         rd.hidden=false;
@@ -3266,17 +3303,19 @@ function showToast(message) {
 
 // ── Settings Modal ──────────────────────────────────────────────────────────
 (function initSettings() {
-  if ($('btnShowSettings')) {
-    $('btnShowSettings').addEventListener('click', openSettingsModal);
-  }
+  // Use event delegation to avoid timing issues
+  document.addEventListener('click', function(e) {
+    const btn = e.target.closest('#btnShowSettings');
+    if (btn) { e.preventDefault(); openSettingsModal(); }
+  });
+
   if ($('btnSettingsClose')) {
-    $('btnSettingsClose').addEventListener('click', () => { $('settingsModal').hidden = true; });
-  }
-  if ($('settingsModal')) {
-    $('settingsModal').addEventListener('click', e => {
-      if (e.target === $('settingsModal')) $('settingsModal').hidden = true;
+    $('btnSettingsClose').addEventListener('click', () => {
+      $('settingsModal').hidden = true;
+      document.body.style.overflow = '';
     });
   }
+  // Full-screen overlay: no backdrop click close
 
   // Tab switching — HTML uses data-stab, pane IDs are settings-{tab}
   document.querySelectorAll('.settings-tab-btn').forEach(btn => {
@@ -3293,12 +3332,26 @@ function showToast(message) {
   }
 
   async function openSettingsModal() {
-    $('settingsModal').hidden = false;
+    console.log('Opening settings modal...');
+    const modal = $('settingsModal');
+    if (!modal) {
+      console.error('Settings modal element not found!');
+      alert('无法打开设置界面，请刷新页面重试');
+      return;
+    }
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
     switchSettingsTab('profile');
     try {
+      console.log('Fetching user profile...');
       const r = await fetch('/api/me', { headers: authHeaders() });
-      if (!r.ok) return;
+      if (!r.ok) {
+        console.error('Failed to fetch profile:', r.status, r.statusText);
+        alert('无法加载个人资料: ' + r.statusText);
+        return;
+      }
       const d = await r.json();
+      console.log('Profile data received:', d);
       // Profile fields
       if ($('settingsDisplayName')) $('settingsDisplayName').value = d.display_name || '';
       if ($('settingsBio')) $('settingsBio').value = d.bio || '';
@@ -3314,10 +3367,10 @@ function showToast(message) {
       const circle = $('settingsAvatarCircle');
       const img    = $('settingsAvatarImg');
       if (d.avatar_b64) {
-        if (circle) circle.textContent = '';
+        if (circle) { circle.hidden = true; circle.textContent = ''; }
         if (img) { img.src = d.avatar_b64; img.hidden = false; }
       } else {
-        if (circle) circle.textContent = (d.display_name || d.username || 'A')[0].toUpperCase();
+        if (circle) { circle.hidden = false; circle.textContent = (d.display_name || d.username || 'A')[0].toUpperCase(); }
         if (img) { img.src = ''; img.hidden = true; }
       }
       // Read-only account info
@@ -3342,7 +3395,12 @@ function showToast(message) {
       if ($('prefAutoHeatmap'))    $('prefAutoHeatmap').checked    = localStorage.getItem('aigi_heatmap_auto') === 'true';
       if ($('prefLightTheme'))     $('prefLightTheme').checked     = localStorage.getItem('aigi_dark_theme') === 'true';
       if ($('prefAiTemplate'))     $('prefAiTemplate').value       = localStorage.getItem('aigi_default_question') || '';
-    } catch(e) { console.error('settings load error', e); }
+      if ($('prefNotify'))         $('prefNotify').checked         = localStorage.getItem('aigi_notify') === 'true';
+      if ($('prefConfThreshold'))  $('prefConfThreshold').value    = localStorage.getItem('aigi_conf_threshold') || '60';
+    } catch(e) {
+      console.error('settings load error', e);
+      alert('加载设置时出错: ' + e.message);
+    }
   }
 
   // ── Profile: avatar upload with Cropper.js ──────────────────────────
@@ -3460,32 +3518,6 @@ function showToast(message) {
     });
   }
 
-  // ── Profile: change username ─────────────────────────────────────────
-  if ($('btnSaveUsername')) {
-    $('btnSaveUsername').addEventListener('click', async () => {
-      const newUsername = ($('settingsNewUsername') && $('settingsNewUsername').value.trim()) || '';
-      const curPass     = ($('settingsUsernamePass') && $('settingsUsernamePass').value) || '';
-      if (!newUsername || !curPass) {
-        setStatus($('usernameStatus'), '请填写新用户名和当前密码', 'error'); return;
-      }
-      const r = await fetch('/api/me/username', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ new_username: newUsername, current_password: curPass }),
-      });
-      const d = await r.json();
-      if (r.ok) {
-        setStatus($('usernameStatus'), '用户名已修改', 'success');
-        const cu = getCurrentUser();
-        if (cu) { cu.username = newUsername; localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu)); updateAuthBar(); }
-        if ($('settingsNewUsername'))   $('settingsNewUsername').value   = '';
-        if ($('settingsUsernamePass'))  $('settingsUsernamePass').value  = '';
-      } else {
-        setStatus($('usernameStatus'), d.detail || '修改失败', 'error');
-      }
-    });
-  }
-
   // ── Security: change password ────────────────────────────────────────
   if ($('btnSavePassword')) {
     $('btnSavePassword').addEventListener('click', async () => {
@@ -3564,6 +3596,14 @@ function showToast(message) {
       if ($('prefAutoHeatmap'))    localStorage.setItem('aigi_heatmap_auto',     $('prefAutoHeatmap').checked    ? 'true' : 'false');
       if ($('prefLightTheme'))     localStorage.setItem('aigi_dark_theme',       $('prefLightTheme').checked     ? 'true' : 'false');
       if ($('prefAiTemplate'))     localStorage.setItem('aigi_default_question', $('prefAiTemplate').value);
+      if ($('prefConfThreshold'))  localStorage.setItem('aigi_conf_threshold',   $('prefConfThreshold').value);
+      if ($('prefNotify')) {
+        const wantNotify = $('prefNotify').checked;
+        if (wantNotify && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+        localStorage.setItem('aigi_notify', wantNotify ? 'true' : 'false');
+      }
       // Apply dark theme immediately
       if ($('prefLightTheme')) document.body.classList.toggle('dark-theme', $('prefLightTheme').checked);
       setStatus($('prefsStatus'), '偏好已保存', 'success');
