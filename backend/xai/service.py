@@ -12,8 +12,8 @@ from typing import Optional
 import numpy as np
 import torch
 
-from backend.xai.lime_explainer import TextLimeExplainer
-from backend.xai.shap_explainer import TextShapExplainer
+# 懒加载：不在模块层面导入 LIME/SHAP，避免内嵌包启动时阴塑
+# TextLimeExplainer 和 TextShapExplainer 会在 _ensure_lime() / _ensure_shap() 中按需导入
 from backend.xai.visualizer import generate_highlighted_html, generate_visualization_data
 
 
@@ -21,8 +21,8 @@ class XAIService:
     """统一的可解释性 AI 服务"""
 
     def __init__(self):
-        self._lime: Optional[TextLimeExplainer] = None
-        self._shap: Optional[TextShapExplainer] = None
+        self._lime = None  # TextLimeExplainer按需初始化
+        self._shap = None  # TextShapExplainer按需初始化
         self._model = None
         self._tokenizer = None
 
@@ -73,14 +73,16 @@ class XAIService:
         return np.vstack(all_probs)
 
     @property
-    def lime_explainer(self) -> TextLimeExplainer:
+    def lime_explainer(self):
         if self._lime is None:
+            from backend.xai.lime_explainer import TextLimeExplainer
             self._lime = TextLimeExplainer(self._predict_proba)
         return self._lime
 
     @property
-    def shap_explainer(self) -> TextShapExplainer:
+    def shap_explainer(self):
         if self._shap is None:
+            from backend.xai.shap_explainer import TextShapExplainer
             self._shap = TextShapExplainer(self._predict_proba)
         return self._shap
 

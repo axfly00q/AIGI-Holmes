@@ -637,9 +637,18 @@ function buildGalleryCard(it, showSearchBtn=true){
     const s=Math.round(p.score);
     return `<div class="mini-row"><span class="mini-label">${p.label_zh}</span><div class="mini-track"><div class="mini-fill ${pc}" style="width:0%" data-score="${s}"></div></div><span class="mini-score">${s}%</span></div>`;
   }).join('');
+  // Grad-CAM 动态 clues 折叠区（仅 FAKE 卡片显示）
+  let cluesHtml = '';
+  if (c === 'fake') {
+    const clues = (it.explanation && it.explanation.clues) || [];
+    if (clues.length > 0) {
+      const liItems = clues.map(cl => `<li class="gallery-card__clue-item">${_escHtml(cl)}</li>`).join('');
+      cluesHtml = `<details class="gallery-card__clues"><summary class="gallery-card__clues-summary">&#9660; 模型判定依据</summary><ul class="gallery-card__clues-list">${liItems}</ul></details>`;
+    }
+  }
   // 点击按钮时调用 _searchFromCard(this) 来读取 data-category
   const searchBtn = showSearchBtn ? `<button class="gallery-card__search-similar" data-category="${_escHtml(it.category || '')}" onclick="_searchFromCard(this)" title="用文章标题和图片类别在网络查找类似图片">查找类似图片</button>` : '';
-  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}${logoHtml}${dimChipsHtml}<div class="gallery-card__mini-bars">${mb}</div>${searchBtn}</div></div>`;
+  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}${logoHtml}${dimChipsHtml}<div class="gallery-card__mini-bars">${mb}</div>${cluesHtml}${searchBtn}</div></div>`;
 }
 function buildReportRow(it){
   const c=it.label==='REAL'?'real':'fake';
@@ -3101,7 +3110,7 @@ function _openImageSearchForCard(category) {
       return `
         <div class="img-search-card" data-idx="${i}" title="${_escHtmlLocal(imgName)}">
           <img src="${_escHtmlLocal(proxyUrl(thumbUrl))}" alt="${_escHtmlLocal(imgName)}" loading="lazy"
-               onerror="this.src='/static/img/placeholder.png'">
+               onerror="this.onerror=null;this.style.opacity='0'">
           <div class="img-search-card-overlay">
             <span class="img-search-card-name">${_escHtmlLocal(imgName)}</span>
           </div>
@@ -3450,8 +3459,8 @@ function showToast(message) {
       }
       const d = await r.json();
       console.log('Profile data received:', d);
-      // Profile fields
-      if ($('settingsDisplayName')) $('settingsDisplayName').value = d.display_name || '';
+      // Profile fields — 昵称即用户名，优先显示 username
+      if ($('settingsDisplayName')) $('settingsDisplayName').value = d.username || d.display_name || '';
       if ($('settingsBio')) $('settingsBio').value = d.bio || '';
       // Sync display_name and avatar to localStorage so sidebar stays in sync
       const _cu = getCurrentUser();
@@ -3607,7 +3616,9 @@ function showToast(message) {
       if (r.ok) {
         const cu = getCurrentUser();
         if (cu) {
-          cu.display_name = $('settingsDisplayName').value.trim();
+          const newName = $('settingsDisplayName').value.trim();
+          cu.username     = d.username || newName;
+          cu.display_name = d.username || newName;
           localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu));
           updateAuthBar();
         }
@@ -3636,6 +3647,35 @@ function showToast(message) {
         if ($('settingsOldPass'))     $('settingsOldPass').value     = '';
         if ($('settingsNewPass'))     $('settingsNewPass').value     = '';
         if ($('settingsConfirmPass')) $('settingsConfirmPass').value = '';
+      }
+    });
+  }
+
+  // ── Security: change username ────────────────────────────────────────
+  if ($('btnSaveUsername')) {
+    $('btnSaveUsername').addEventListener('click', async () => {
+      const newU = ($('settingsNewUsername') && $('settingsNewUsername').value.trim()) || '';
+      const curP = ($('settingsUsernamePass') && $('settingsUsernamePass').value) || '';
+      if (!newU) { setStatus($('usernameStatus'), '请输入新用户名', 'error'); return; }
+      if (newU.length < 3) { setStatus($('usernameStatus'), '用户名至少 3 位', 'error'); return; }
+      if (!curP) { setStatus($('usernameStatus'), '请输入当前密码以验证身份', 'error'); return; }
+      const r = await fetch('/api/me/username', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ new_username: newU, current_password: curP }),
+      });
+      const d = await r.json();
+      setStatus($('usernameStatus'), r.ok ? '用户名已修改，请重新登录' : (d.detail || '修改失败'), r.ok ? 'success' : 'error');
+      if (r.ok) {
+        if ($('settingsNewUsername')) $('settingsNewUsername').value = '';
+        if ($('settingsUsernamePass')) $('settingsUsernamePass').value = '';
+        // 更新本地缓存中的用户名并重新登录
+        const cu = getCurrentUser();
+        if (cu) {
+          cu.username = newU;
+          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(cu));
+          updateAuthBar();
+        }
       }
     });
   }

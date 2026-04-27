@@ -75,9 +75,19 @@ async def update_my_profile(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update display_name, bio, and/or avatar."""
+    """Update display_name/username (昵称即用户名), bio, and/or avatar."""
     if body.display_name is not None:
-        user.display_name = body.display_name
+        new_name = body.display_name.strip()
+        if len(new_name) < 3:
+            raise HTTPException(status_code=400, detail="昵称至少需要 3 个字符。")
+        # 查重：排除自身后检查 username 是否已被占用
+        conflict = await db.execute(
+            select(User).where(User.username == new_name, User.id != user.id)
+        )
+        if conflict.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="该昵称（用户名）已被使用。")
+        user.username = new_name
+        user.display_name = new_name
     if body.bio is not None:
         user.bio = body.bio
     if body.avatar_b64 is not None:
@@ -86,7 +96,7 @@ async def update_my_profile(
             raise HTTPException(status_code=400, detail="头像文件过大，请压缩后重试（最大约 500 KB）。")
         user.avatar_b64 = body.avatar_b64 if body.avatar_b64 else None
     await db.commit()
-    return {"message": "个人资料已更新。"}
+    return {"message": "个人资料已更新。", "username": user.username}
 
 
 @router.patch("/username")

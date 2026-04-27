@@ -128,15 +128,13 @@ def _grad_cam(img_tensor: torch.Tensor, class_idx: int) -> np.ndarray:
         handle_bwd.remove()
 
 
-def grad_cam_overlay(pil_image: Image.Image, class_idx: int) -> str:
-    """Return a base64 data-URI JPEG of the image overlaid with the Grad-CAM
-    heatmap for *class_idx*."""
-    img_rgb = pil_image.convert("RGB")
-    inp = _transform(img_rgb).unsqueeze(0).to(DEVICE)
-    inp.requires_grad_(True)
+def _build_cam_overlay(img_rgb: Image.Image, cam_np: np.ndarray) -> str:
+    """Render a Grad-CAM heatmap over *img_rgb* and return a base64 JPEG URI.
 
-    cam_np = _grad_cam(inp, class_idx)
-
+    Accepts a precomputed *cam_np* (H, W) normalised to [0, 1] so the same
+    activation map can be reused for both clue generation and visualisation
+    without a second backward pass.
+    """
     w, h = img_rgb.size
     cam_resized = np.array(
         Image.fromarray((cam_np * 255).astype(np.uint8)).resize((w, h), Image.BILINEAR),
@@ -160,6 +158,207 @@ def grad_cam_overlay(pil_image: Image.Image, class_idx: int) -> str:
     buf = io.BytesIO()
     result.save(buf, format="JPEG", quality=82)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def grad_cam_overlay(pil_image: Image.Image, class_idx: int) -> str:
+    """Return a base64 data-URI JPEG of the image overlaid with the Grad-CAM
+    heatmap for *class_idx*."""
+    img_rgb = pil_image.convert("RGB")
+    inp = _transform(img_rgb).unsqueeze(0).to(DEVICE)
+    inp.requires_grad_(True)
+    cam_np = _grad_cam(inp, class_idx)
+    return _build_cam_overlay(img_rgb, cam_np)
+
+
+# ---------------------------------------------------------------------------
+# Grad-CAM region analysis & dynamic clue generation
+# ---------------------------------------------------------------------------
+
+def analyze_cam_regions(cam_np: np.ndarray, img_w: int, img_h: int) -> dict:
+    """Analyse the spatial distribution of a Grad-CAM activation map.
+
+    Args:
+        cam_np: Normalised activation map (H, W) in [0, 1] from _grad_cam().
+        img_w:  Original image width  (pixels) — reserved for future use.
+        img_h:  Original image height (pixels) — reserved for future use.
+
+    Returns a dict with keys:
+        position           – Chinese spatial label, e.g. "左上方", "中央"
+        h_pos              – Horizontal: "左" / "中" / "右"
+        v_pos              – Vertical:   "上" / "中" / "下"
+        concentration      – "高度集中" / "中等分布" / "大面积"
+        concentration_ratio – High-activation pixels as % of total map area
+        near_edge          – True if high-activation region touches image border
+        activation_strength – Mean activation of the high-activation region
+    """
+    # Degenerate map (all zeros or flat) — return safe neutral defaults
+    if cam_np.size == 0 or float(cam_np.max() - cam_np.min()) < 1e-6:
+        return {
+            "position": "中央",
+            "h_pos": "中",
+            "v_pos": "中",
+            "concentration": "大面积",
+            "concentration_ratio": 50.0,
+            "near_edge": False,
+            "activation_strength": 0.5,
+        }
+
+    # Adaptive threshold: top-25 % activations define the "high" region
+    threshold = float(np.percentile(cam_np, 75))
+    high_mask = cam_np > threshold
+    total_pixels = cam_np.size
+    high_pixels = int(high_mask.sum())
+    concentration_ratio = round((high_pixels / total_pixels) * 100.0, 1)
+
+    if concentration_ratio < 15:
+        concentration = "高度集中"
+    elif concentration_ratio < 40:
+        concentration = "中等分布"
+    else:
+        concentration = "大面积"
+
+    # Centroid of the high-activation region (normalised coordinates 0..1)
+    h_map, w_map = cam_np.shape
+    ys, xs = np.where(high_mask)
+    if len(xs) == 0:
+        cy_norm, cx_norm = 0.5, 0.5
+    else:
+        cy_norm = float(ys.mean()) / h_map   # 0 = top,  1 = bottom
+        cx_norm = float(xs.mean()) / w_map   # 0 = left, 1 = right
+
+    h_pos = "左" if cx_norm < 0.35 else ("右" if cx_norm > 0.65 else "中")
+    v_pos = "上" if cy_norm < 0.35 else ("下" if cy_norm > 0.65 else "中")
+
+    if v_pos == "中" and h_pos == "中":
+        position = "中央"
+    elif v_pos == "中":
+        position = h_pos + "侧"
+    elif h_pos == "中":
+        position = v_pos + "方"
+    else:
+        position = h_pos + v_pos + "方"   # e.g. "左上方"、"右下方"
+
+    # Edge proximity: any high-activation pixel within 10 % of shorter edge
+    edge_band = max(1, int(min(h_map, w_map) * 0.10))
+    near_edge = bool(
+        len(ys) > 0 and (
+            (ys < edge_band).any()
+            or (ys > h_map - edge_band - 1).any()
+            or (xs < edge_band).any()
+            or (xs > w_map - edge_band - 1).any()
+        )
+    )
+
+    activation_strength = round(
+        float(cam_np[high_mask].mean()) if high_pixels > 0 else 0.5, 3
+    )
+
+    return {
+        "position": position,
+        "h_pos": h_pos,
+        "v_pos": v_pos,
+        "concentration": concentration,
+        "concentration_ratio": concentration_ratio,
+        "near_edge": near_edge,
+        "activation_strength": activation_strength,
+    }
+
+
+def generate_cam_clues(label: str, cam_np: np.ndarray, img_w: int, img_h: int) -> list[str]:
+    """Generate spatially-aware, dynamic explanation clues from a Grad-CAM map.
+
+    Analyses the activation distribution (position, concentration, edge
+    proximity, strength) and selects matching sentence templates so each
+    result carries clues specific to that image rather than a fixed list.
+
+    Falls back gracefully to *_COMMON_FAKE_CLUES* on any analysis error.
+    """
+    try:
+        ri = analyze_cam_regions(cam_np, img_w, img_h)
+    except Exception:
+        return _COMMON_FAKE_CLUES[:3] if label == "FAKE" else []
+
+    clues: list[str] = []
+
+    if label == "FAKE":
+        # Primary clue — spatial focus & concentration level
+        if ri["concentration"] == "高度集中":
+            clues.append(
+                f"模型重点关注了图像{ri['position']}的局部区域"
+                f"（高激活面积占比 {ri['concentration_ratio']:.1f}%），"
+                f"该区域呈现出典型的 AI 合成局部不一致特征"
+            )
+        elif ri["concentration"] == "中等分布":
+            clues.append(
+                f"模型在图像{ri['position']}检测到中等范围的纹理异常"
+                f"（激活面积占比 {ri['concentration_ratio']:.1f}%），"
+                f"常见于扩散模型生成图片的过渡区域"
+            )
+        else:
+            clues.append(
+                f"模型激活分布较广（覆盖图像 {ri['concentration_ratio']:.1f}% 的区域），"
+                f"整体风格特征偏离真实场景，符合 AI 全局风格迁移的特征"
+            )
+
+        # Secondary clue — edge anomaly (only appended when relevant)
+        if ri["near_edge"]:
+            clues.append(
+                f"图像{ri['position']}边缘区域存在高激活响应，"
+                f"可能为 AI 生成时的拼接或内容补全边界痕迹"
+            )
+
+        # Third clue — activation strength hints at generator family
+        if ri["activation_strength"] > 0.82:
+            clues.append(
+                "高激活强度（≥0.82）指向 GAN 风格的尖锐伪迹，"
+                "模型对该区域的判定依据非常集中"
+            )
+        elif ri["activation_strength"] < 0.55:
+            clues.append(
+                "较低的激活强度梯度分布符合扩散模型的平滑生成特点，"
+                "图像细节过渡可能过于均匀"
+            )
+        else:
+            clues.append("图像纹理细节与真实相机噪点分布不匹配，存在人工合成痕迹")
+
+    else:  # label == "REAL"
+        if ri["concentration"] == "高度集中":
+            clues.append(
+                f"模型重点核查了图像{ri['position']}区域，"
+                f"该区域激活集中但符合真实照片的局部特征分布"
+            )
+        elif ri["concentration"] == "大面积":
+            clues.append(
+                f"模型激活分布广泛（覆盖 {ri['concentration_ratio']:.1f}% 区域），"
+                f"图像整体特征均匀，符合真实相机成像的自然规律"
+            )
+        else:
+            clues.append(
+                f"图像{ri['position']}的特征激活与周围区域协调一致，"
+                f"未发现明显的 AI 合成边界或纹理突变"
+            )
+
+    return clues[:3]
+
+
+def _make_batch_clues(label: str, confidence: float) -> list[str]:
+    """Lightweight dynamic clues for batch detection (no Grad-CAM pass).
+
+    Returns a concise confidence-aware hint; defers detailed spatial analysis
+    to single-image detection mode so batch throughput is not impacted.
+    """
+    if label != "FAKE":
+        return []
+    if confidence >= 75:
+        level_hint = "高置信度"
+    elif confidence >= 60:
+        level_hint = "中等置信度"
+    else:
+        level_hint = "低置信度"
+    return [
+        f"{level_hint}判定为 AI 生成（置信度 {confidence:.1f}%），"
+        f"建议进行单张精细检测以获取 Grad-CAM 区域详细分析",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +388,20 @@ _COMMON_FAKE_CLUES = [
 ]
 
 
-def explain_result(label: str, confidence: float) -> dict:
-    """Return a structured text explanation for the detection result."""
+def explain_result(
+    label: str,
+    confidence: float,
+    *,
+    cam_clues: list[str] | None = None,
+) -> dict:
+    """Return a structured text explanation for the detection result.
+
+    Args:
+        label:      "FAKE" or "REAL".
+        confidence: Top-class probability in [0, 100].
+        cam_clues:  Dynamic clues from *generate_cam_clues()*; when provided
+                    these replace the static *_COMMON_FAKE_CLUES* fallback.
+    """
     rules = _FAKE_RULES if label == "FAKE" else _REAL_RULES
     level, summary = rules[-1][1], rules[-1][2]
     for threshold, lvl, desc in rules:
@@ -198,7 +409,11 @@ def explain_result(label: str, confidence: float) -> dict:
             level, summary = lvl, desc
             break
 
-    clues = _COMMON_FAKE_CLUES[:3] if label == "FAKE" else []
+    if cam_clues is not None:
+        clues = cam_clues
+    else:
+        clues = _COMMON_FAKE_CLUES[:3] if label == "FAKE" else []
+
     return {
         "level": level,
         "summary": summary,
@@ -214,6 +429,10 @@ def explain_result(label: str, confidence: float) -> dict:
 def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
     """Run the detector on a PIL image.
 
+    Always performs a single Grad-CAM backward pass to power spatially-aware
+    dynamic explanation clues.  When *with_cam* is True the same *cam_np* is
+    reused to build the overlay image — there is no redundant second pass.
+
     Returns a dict:
         label       (str)   – "FAKE" or "REAL"
         label_zh    (str)   – localised label with emoji
@@ -223,6 +442,8 @@ def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
         cam_image   (str|None) – base64 JPEG overlay (only when with_cam=True)
     """
     img_rgb = pil_image.convert("RGB")
+
+    # ── Step 1: fast inference (no gradient tracking needed for probs) ──────
     img_tensor = _transform(img_rgb).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
         output = _model(img_tensor)
@@ -234,13 +455,21 @@ def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
     ]
     results.sort(key=lambda x: x["score"], reverse=True)
     top = results[0]
+    top_idx = CLASSES.index(top["label"])
 
-    explanation = explain_result(top["label"], top["score"])
+    # ── Step 2: Grad-CAM (fresh tensor with requires_grad) ───────────────────
+    # Runs once regardless of with_cam; cam_np drives both dynamic clues and
+    # the optional overlay image so there is no second backward pass.
+    inp_cam = _transform(img_rgb).unsqueeze(0).to(DEVICE)
+    inp_cam.requires_grad_(True)
+    cam_np = _grad_cam(inp_cam, top_idx)
 
-    cam_image = None
-    if with_cam:
-        top_idx = CLASSES.index(top["label"])
-        cam_image = grad_cam_overlay(img_rgb, top_idx)
+    # ── Step 3: dynamic clues & explanation ──────────────────────────────────
+    cam_clues = generate_cam_clues(top["label"], cam_np, *img_rgb.size)
+    explanation = explain_result(top["label"], top["score"], cam_clues=cam_clues)
+
+    # ── Step 4: optional overlay image — reuses cam_np, no extra backward ───
+    cam_image = _build_cam_overlay(img_rgb, cam_np) if with_cam else None
 
     return {
         "label": top["label"],
@@ -278,7 +507,10 @@ def detect_batch(pil_images: list[Image.Image]) -> list[dict]:
             "label_zh": top["label_zh"],
             "confidence": top["score"],
             "probs": items,
-            "explanation": explain_result(top["label"], top["score"]),
+            "explanation": explain_result(
+                top["label"], top["score"],
+                cam_clues=_make_batch_clues(top["label"], top["score"]),
+            ),
             "cam_image": None,
         })
     return results

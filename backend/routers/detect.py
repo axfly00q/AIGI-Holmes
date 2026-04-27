@@ -577,6 +577,7 @@ async def _process_batch_run(
                 "probs": [{**p, "score": round(p["score"], 1)} for p in result["probs"]],
                 "thumbnail": f"data:image/jpeg;base64,{thumbnail}",
                 "category": category,
+                "explanation": result.get("explanation"),
             },
         })
         global_index += 1

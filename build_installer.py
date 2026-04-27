@@ -40,6 +40,7 @@ DIST_DIR      = ROOT / "dist"
 EXE_DIR       = DIST_DIR / "AIGI-Holmes"
 MODEL_FILE    = ROOT / "finetuned_fake_real_resnet50.pth"
 ICON_FILE     = ROOT / "asset" / "app.ico"
+RELEASE_DIR   = ROOT.parent / "AIGI-Holmes-release"  # 最终发布文件夹，与源码分离
 
 REQUIRED_PYTHON = (3, 9)
 APP_VERSION     = "2.0.0"   # keep in sync with installer.iss #define AppVersion
@@ -210,6 +211,56 @@ def run_inno(iscc_path: str, version: str):
             _warn("Installer EXE not found in dist/ — check Inno Setup output above.")
 
 
+def copy_env_file():
+    """将 .env（含 API 密钥）复制到 dist/AIGI-Holmes/，供便携版使用。"""
+    src = ROOT / ".env"
+    dst = EXE_DIR / ".env"
+    if not EXE_DIR.is_dir():
+        _warn(f"dist 目录不存在，跳过 .env 复制: {EXE_DIR}")
+        return
+    if src.is_file():
+        shutil.copy2(src, dst)
+        _ok(f"已复制 .env 到 {dst.relative_to(ROOT)}（含 API 密钥）")
+    else:
+        _warn(".env 文件未找到，便携版将缺少 API 密钥配置")
+
+
+def create_release_folder(version: str):
+    """在项目目录外创建 AIGI-Holmes-release/ 文件夹，存放最终发行物。"""
+    _banner("整理发布文件夹")
+
+    RELEASE_DIR.mkdir(parents=True, exist_ok=True)
+    _info(f"发布目录: {RELEASE_DIR}")
+
+    # ── 复制 Windows 安装包 ─────────────────────────────────────────────────
+    setup_exe = DIST_DIR / f"AIGI-Holmes-Setup-v{version}.exe"
+    if setup_exe.is_file():
+        dst = RELEASE_DIR / setup_exe.name
+        shutil.copy2(setup_exe, dst)
+        size_mb = dst.stat().st_size / (1024 ** 2)
+        _ok(f"安装包 → {dst.name}  ({size_mb:.0f} MB)")
+    else:
+        _warn("安装包 EXE 未找到，仅打包便携版")
+
+    # ── 写入快速使用说明 ─────────────────────────────────────────────────────
+    readme = RELEASE_DIR / "安装说明.txt"
+    readme.write_text(
+        "AIGI-Holmes 发行包\n"
+        "==================\n\n"
+        "Windows 一键安装包:\n"
+        f"  {setup_exe.name if setup_exe.is_file() else 'AIGI-Holmes-Setup-v' + version + '.exe'}\n"
+        "  双击安装 → 桌面出现快捷方式 → 双击启动（首次加载约 15 秒）\n\n"
+        "系统要求:\n"
+        "  Windows 10 (build 17763) 或更新版本\n"
+        "  Edge WebView2 运行时（Windows 10/11 已内置）\n\n"
+        "API 密钥已内置于安装包中，开箱即用。\n",
+        encoding="utf-8",
+    )
+    _ok(f"安装说明 → {readme.name}")
+
+    print(f"\n  {bold('发布目录')} → {green(str(RELEASE_DIR))}\n")
+
+
 def print_summary(skip_inno: bool, inno_found: bool):
     _banner("Build Complete")
 
@@ -293,11 +344,18 @@ def main():
     # PyInstaller
     run_pyinstaller()
 
+    # 复制 .env（含 API 密钥）到便携版目录
+    _banner("Post-build: 复制 .env 配置文件")
+    copy_env_file()
+
     # Inno Setup
     if not args.skip_inno and inno_path:
         run_inno(inno_path, args.version)
     else:
         _info("Inno Setup step skipped.")
+
+    # 整理发布文件夹
+    create_release_folder(args.version)
 
     # Summary
     print_summary(args.skip_inno, inno_path is not None)

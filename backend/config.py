@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     DOUBAO_API_KEY: str = ""
     DOUBAO_MODEL: str = "doubao-pro-32k"
 
+    # Serper 搜索 API
+    SERPER_API_KEY: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 

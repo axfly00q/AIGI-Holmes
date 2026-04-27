@@ -18,7 +18,7 @@ from backend.auth import (
 )
 from backend.config import get_settings
 from backend.database import get_db
-from backend.dependencies import require_role
+from backend.dependencies import get_current_user, require_role
 from backend.exceptions import AuthError, ForbiddenError
 from backend.models.user import User
 
@@ -111,7 +111,7 @@ async def change_user_role(
     username: str,
     body: ChangeRoleRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
 ):
     if body.admin_password != get_settings().ADMIN_ROLE_PASSWORD:
         raise ForbiddenError("管理密码错误。")
@@ -120,8 +120,6 @@ async def change_user_role(
     target = result.scalar_one_or_none()
     if target is None:
         raise HTTPException(status_code=404, detail="用户不存在。")
-    if target.id == current_user.id and body.role != "admin":
-        raise HTTPException(status_code=400, detail="不能将当前管理员账号降级为非管理员。")
     target.role = body.role
     await db.commit()
     await db.refresh(target)

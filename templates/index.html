@@ -896,8 +896,8 @@
         </div>
 
         <div class="settings-field">
-          <label class="settings-label">用户名</label>
-          <input class="url-input" id="settingsDisplayName" placeholder="你的用户名" maxlength="64" autocomplete="off" />
+          <label class="settings-label">昵称</label>
+          <input class="url-input" id="settingsDisplayName" placeholder="你的昵称" maxlength="64" autocomplete="off" />
         </div>
         <div class="settings-field">
           <label class="settings-label">个性签名</label>
@@ -922,6 +922,19 @@
         </div>
         <button class="btn-detect" id="btnSavePassword">修改密码</button>
         <p class="status-msg" id="passwordStatus"></p>
+
+        <hr class="settings-divider" />
+        <h4 class="settings-section-title">修改用户名</h4>
+        <div class="settings-field">
+          <label class="settings-label">新用户名</label>
+          <input class="url-input" id="settingsNewUsername" placeholder="至少 3 位" maxlength="64" autocomplete="off" />
+        </div>
+        <div class="settings-field">
+          <label class="settings-label">当前密码</label>
+          <input class="url-input" id="settingsUsernamePass" type="password" placeholder="验证身份" autocomplete="current-password" />
+        </div>
+        <button class="btn-detect" id="btnSaveUsername">修改用户名</button>
+        <p class="status-msg" id="usernameStatus"></p>
 
         <hr class="settings-divider" />
         <h4 class="settings-section-title">账号信息</h4>

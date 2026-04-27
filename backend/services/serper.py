@@ -2,13 +2,13 @@
 Serper.dev Search API client for news and image search.
 https://serper.dev
 """
-import os
-
 import httpx
+
+from backend.config import get_settings
 
 
 def _get_key() -> str:
-    key = os.getenv("SERPER_API_KEY", "").strip()
+    key = get_settings().SERPER_API_KEY.strip()
     if not key:
         raise ValueError("SERPER_API_KEY 未配置，请在 .env 文件中设置")
     return key

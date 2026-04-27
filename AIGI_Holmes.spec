@@ -171,6 +171,14 @@ hidden += ['openpyxl', 'openpyxl.styles', 'openpyxl.utils', 'openpyxl.workbook']
 # ── Document extraction (PDF / Word) ─────────────────────────────────────────
 hidden += ['fitz', 'docx', 'docx.oxml', 'docx.shared']
 
+# ── XAI — LIME & SHAP explainability ─────────────────────────────────────────
+hidden += collect_submodules('lime')
+hidden += collect_submodules('shap')
+hidden += collect_submodules('sklearn')
+extra_datas += collect_data_files('lime')
+extra_datas += collect_data_files('shap')
+extra_datas += collect_data_files('sklearn')
+
 # ── Misc utilities ────────────────────────────────────────────────────────────
 hidden += [
     'packaging', 'packaging.version',
@@ -218,7 +226,6 @@ a = Analysis(
         'notebook', 'jupyter', 'jupyter_core', 'jupyter_client',
         'IPython',
         'pandas',
-        'sklearn', 'sklearn',
         'PySide2', 'PySide6', 'PyQt5', 'PyQt6',   # Qt backends for pywebview — not used on Windows
         'gi',           # GTK
         # test / dev only

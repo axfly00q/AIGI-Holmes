@@ -742,6 +742,33 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
 .mini-fill.real { background: #22c55e; }
 .mini-score { font-size: 0.75rem; color: #64748b; width: 38px; text-align: right; }
 
+/* Grad-CAM clues 折叠块 */
+.gallery-card__clues {
+  border-top: 1px solid #fecaca;
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.gallery-card__clues-summary {
+  font-size: 0.75rem;
+  color: #dc2626;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.gallery-card__clues-summary::-webkit-details-marker { display: none; }
+.gallery-card__clues-list {
+  margin: 6px 0 0 0;
+  padding-left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gallery-card__clue-item {
+  font-size: 0.75rem;
+  color: #7f1d1d;
+  line-height: 1.45;
+}
+
 /* ── Report ────────────────────────────────────────────────── */
 .report-section {
   margin-top: 28px;
