@@ -8,7 +8,7 @@ import json
 from functools import partial
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from backend.database import get_db
 from backend.dependencies import get_optional_user
 from backend.models.detection import TextDetectionRecord
 from backend.models.user import User
+from backend.rate_limit import limiter
 
 router = APIRouter(prefix="/api/text", tags=["text-detection"])
 
@@ -121,7 +122,9 @@ async def _save_text_record(
 
 
 @router.post("/detect", response_model=TextDetectResponse)
+@limiter.limit("30/minute")   # 文本检测每 IP 每分钟最多 30 次
 async def api_text_detect(
+    request: Request,           # slowapi 需要 Request 对象
     body: TextDetectRequest,
     user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),

@@ -17,12 +17,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.requests import Request
 
 from backend.cache import close_redis
+from backend.config import get_settings
 from backend.database import Base, engine
 from backend.exceptions import register_exception_handlers
 from backend.models.feedback import FeedbackRecord as _FeedbackRecord  # noqa: F401 — registers table
+from backend.rate_limit import limiter
 from backend.routers import auth, detect, report, admin, ws, feedback, history, search, text_detect, profile
 from backend.clip_classify import _load_clip
 
@@ -43,6 +48,12 @@ else:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    _settings = get_settings()
+    if not _settings.SECRET_KEY:
+        logger.warning("[安全警告] SECRET_KEY 未配置，使用随机临时密钥（每次重启后所有 token 失效）")
+    if not _settings.ADMIN_ROLE_PASSWORD:
+        logger.warning("[安全警告] ADMIN_ROLE_PASSWORD 未配置，角色管理功能将不可用")
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
@@ -58,6 +69,18 @@ async def lifespan(app: FastAPI):
     # 使用线程池异步加载，不阻塞应用启动
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _preload_clip)
+
+    # 在后台加载 RoBERTa 文本检测模型（不阻塞应用启动）
+    def _preload_text_model():
+        try:
+            from backend.text_detect import _ensure_text_model
+            logger.info("Preloading text detection model in background...")
+            _ensure_text_model()
+            logger.info("Text detection model preloaded successfully")
+        except Exception as e:
+            logger.warning("Failed to preload text detection model: %s", str(e))
+
+    loop.run_in_executor(None, _preload_text_model)
     
     yield
     
@@ -70,11 +93,22 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 app = FastAPI(title="AIGI-Holmes", version="2.0.0", lifespan=lifespan)
 
+# 速率限制
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 # CORS
+_cors_origins_raw = get_settings().ALLOWED_ORIGINS
+_cors_origins = (
+    [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+    if _cors_origins_raw and _cors_origins_raw.strip() != "*"
+    else ["*"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=False,   # JWT 使用 Authorization header，不需要 credentials 模式
     allow_methods=["*"],
     allow_headers=["*"],
 )

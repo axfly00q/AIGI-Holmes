@@ -583,6 +583,34 @@ let lastDetectionLabel = '';  // 'FAKE' or 'REAL'
 
 function _escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):'';}
 
+/**
+ * 构建文字检测结果卡片（用于批量检测中的 PDF/DOCX 文本内容）
+ * @param {object} d - result_text 事件数据，含 filename, text_preview, result
+ */
+function buildTextCard(d){
+  const r=d.result||{};
+  const isFake=r.label==='FAKE';
+  const cls=isFake?'fake':'real';
+  const mb=(r.probs||[]).map(p=>{
+    const pc=p.label==='REAL'?'real':'fake';
+    const s=Math.round(p.score||0);
+    return `<div class="mini-row"><span class="mini-label">${_escHtml(p.label_zh||p.label)}</span><div class="mini-track"><div class="mini-fill ${pc}" style="width:0%" data-score="${s}"></div></div><span class="mini-score">${s}%</span></div>`;
+  }).join('');
+  const preview=_escHtml((d.text_preview||'').replace(/\s+/g,' ').trim());
+  return `<div class="gallery-card text-detect-card${isFake?' ai-generated':''}">
+    <div class="text-card-icon">📄</div>
+    <div class="gallery-card__body">
+      <div class="gallery-card__top-row">
+        <span class="gallery-card__badge ${cls}">${_escHtml(r.label_zh||r.label)}</span>
+        <span class="gallery-card__cat">文字内容</span>
+      </div>
+      <p class="gallery-card__conf">置信度：<span>${Math.round(r.confidence||0)}%</span></p>
+      <div class="gallery-card__mini-bars">${mb}</div>
+      ${preview?`<p class="text-card-preview">${preview}</p>`:''}
+    </div>
+  </div>`;
+}
+
 function buildGalleryCard(it, showSearchBtn=true){
   const c=it.label==='REAL'?'real':'fake';
   const catBadge = it.category ? `<span class="gallery-card__cat">${it.category}</span>` : '';
@@ -594,7 +622,16 @@ function buildGalleryCard(it, showSearchBtn=true){
   const faceScore = it.face_score != null ? Math.round(it.face_score) : null;
   const sealHtml = sealScore != null ? `<span class="dim-chip dim-chip--seal" style="color:${sealScore>=70?'#22c55e':sealScore>=40?'#f59e0b':'#ef4444'}">章 ${sealScore}%</span>` : '';
   const faceHtml = faceScore != null && faceScore !== 50 ? `<span class="dim-chip dim-chip--face" style="color:${faceScore>=70?'#22c55e':faceScore>=40?'#f59e0b':'#ef4444'}">脸 ${faceScore}%</span>` : '';
-  const dimChipsHtml = (sealHtml||faceHtml) ? `<div class="gallery-card__dim-chips">${sealHtml}${faceHtml}</div>` : '';
+  // EXIF 芯片：若检测到 AI 软件签名 → 红色警告；若为真实相机 → 绿色
+  const exifScore = it.exif_score != null ? Math.round(it.exif_score) : null;
+  const exifSoftware = it.exif_software ? _escHtml(it.exif_software) : null;
+  let exifHtml = '';
+  if (exifSoftware) {
+    exifHtml = `<span class="dim-chip dim-chip--exif" style="color:#ef4444" title="${exifSoftware}">EXIF:AI⚠</span>`;
+  } else if (exifScore != null && exifScore >= 80) {
+    exifHtml = `<span class="dim-chip dim-chip--exif" style="color:#22c55e" title="${it.exif_details||''}">EXIF:相机</span>`;
+  }
+  const dimChipsHtml = (sealHtml||faceHtml||exifHtml) ? `<div class="gallery-card__dim-chips">${sealHtml}${faceHtml}${exifHtml}</div>` : '';
   const mb=(it.probs||[]).map(p=>{
     const pc=p.label==='REAL'?'real':'fake';
     const s=Math.round(p.score);
@@ -610,13 +647,14 @@ function buildReportRow(it){
   const logoText = it.logo_detected ? ` · 来源: ${_escHtml(it.logo_detected)}(${Math.round(it.logo_confidence||0)}%)` : '';
   const sealText = it.seal_score != null ? ` · 章: ${Math.round(it.seal_score)}%` : '';
   const faceText = (it.face_score != null && it.face_score !== 50) ? ` · 脸: ${Math.round(it.face_score)}%` : '';
-  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.label_zh)}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}${logoText}${sealText}${faceText}</span></div>`;
+  const exifText = it.exif_software ? ` · EXIF:${_escHtml(it.exif_software)}⚠` : (it.exif_score != null && it.exif_score >= 80 ? ' · EXIF:相机' : '');
+  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.label_zh)}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}${logoText}${sealText}${faceText}${exifText}</span></div>`;
 }
 
 async function detectUrlText() {
   if (!_urlArticleText) return;
   const btn = $('btnDetectUrlText');
-  if (btn) { btn.disabled = true; btn.innerHTML = spinnerHTML() + '\u68c0\u6d4b\u4e2d…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = spinnerHTML() + '\u68c0\u6d4b\u4e2d\u2026'; }
   try {
     const res = await fetch('/api/text/detect', {
       method: 'POST',
@@ -624,7 +662,15 @@ async function detectUrlText() {
       body: JSON.stringify({ text: _urlArticleText, xai_method: 'lime', num_features: 15 }),
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.detail || `HTTP ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 429) throw new Error('\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u5019\u518d\u8bd5');
+      // 语言不支持 — 内联展示在结果区而不是 toast
+      if (result.detail && result.detail.includes('\u4ec5\u652f\u6301\u82f1\u6587')) {
+        renderUrlTextUnsupported(result.detail);
+        return;
+      }
+      throw new Error(result.detail || `HTTP ${res.status}`);
+    }
     _urlTextResult = result;
     renderUrlTextResult(result);
   } catch (err) {
@@ -633,6 +679,18 @@ async function detectUrlText() {
     const b = $('btnDetectUrlText');
     if (b) { b.disabled = false; b.textContent = '\u91cd\u65b0\u68c0\u6d4b'; }
   }
+}
+
+function renderUrlTextUnsupported(detail) {
+  const wrap = $('urlTextDetectResult');
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <div class="url-text-result-card" style="background:#fffbeb;border:1px solid #fcd34d;padding:14px 16px;border-radius:8px;">
+      <div style="font-size:15px;color:#92400e;font-weight:600;margin-bottom:6px;">&#9888; \u6682\u4e0d\u652f\u6301\u8be5\u8bed\u8a00</div>
+      <div style="font-size:13px;color:#78350f;">${detail}</div>
+    </div>
+  `;
+  wrap.hidden = false;
 }
 
 function renderUrlTextResult(result) {
@@ -1268,7 +1326,7 @@ async function handleBatchFiles(fileList){
       $('detectProgressBar').style.width=pct+'%';
 
       const r=d.result;
-      const cardHtml=buildGalleryCard({...r, index:d.index+_batchIndexOffset+1, url:d.filename}, false);
+      const cardHtml=buildGalleryCard({...r, index:(d.img_index!=null?d.img_index:d.index)+_batchIndexOffset+1, url:d.filename}, false);
 
       if(d.source){
         let group=sourceGroups[d.source];
@@ -1302,14 +1360,53 @@ async function handleBatchFiles(fileList){
 
       _updateBatchStatsFromResult(r);
 
+    }else if(d.type==='result_text'){
+      // 文字检测结果卡
+      doneImages++;
+      $('detectLabel').textContent=`检测进度 ${doneImages}/${totalImages}`;
+      const pct=totalImages?Math.round(doneImages/totalImages*100):0;
+      $('detectProgressBar').style.width=pct+'%';
+
+      const cardHtml=buildTextCard(d);
+      // result_text 一定有 source（源文件名），插入到来源分组
+      let group=sourceGroups[d.source];
+      if(!group){
+        group=document.createElement('details');
+        group.className='batch-source-group';
+        group.open=true;
+        const summary=document.createElement('summary');
+        summary.textContent=d.source;
+        group.appendChild(summary);
+        const inner=document.createElement('div');
+        inner.className='gallery batch-source-gallery';
+        group.appendChild(inner);
+        g.appendChild(group);
+        sourceGroups[d.source]=group;
+      }
+      // 文字卡插到分组最前面（排在图片卡之前）
+      group.querySelector('.batch-source-gallery').insertAdjacentHTML('afterbegin',cardHtml);
+
+      // 触发 mini-bar 动画（选取当前分组的第一张文字卡，即刚插入的那张）
+      requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+        const gallery=group.querySelector('.batch-source-gallery');
+        const firstTextCard=gallery?gallery.querySelector('.text-detect-card'):null;
+        if(firstTextCard){
+          firstTextCard.querySelectorAll('.mini-fill').forEach(x=>{
+            x.style.width=x.dataset.score+'%';
+          });
+        }
+      });});
+
+      _updateBatchStatsFromResult(d.result);
+
     }else if(d.type==='item_skip'){
       const skipCard=`<div class="gallery-card skip-card"><div class="gallery-card__body"><span class="gallery-card__badge" style="background:#e2e8f0;color:#64748b">跳过</span><p class="gallery-card__conf">${d.filename||''}</p><p style="font-size:0.82rem;color:#94a3b8;margin:4px 0 0">${d.reason||''}</p></div></div>`;
       g.insertAdjacentHTML('beforeend',skipCard);
 
     }else if(d.type==='complete'){
       $('detectProgressBar').classList.add('complete');
-      _batchIndexOffset+=doneImages;
-      setStatus($('batchStatus'),`本批检测完成 ${d.count} 张，累计 ${_batchIndexOffset} 张`,'success');
+      _batchIndexOffset+=(d.img_count!=null?d.img_count:doneImages);
+      setStatus($('batchStatus'),`本批检测完成 ${d.count} 项，累计图片 ${_batchIndexOffset} 张`,'success');
       _batchRunning=false;
       _batchWs=null;
     }
@@ -3194,6 +3291,7 @@ function showToast(message) {
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
+        if (response.status === 429) throw new Error('\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u5019\u518d\u8bd5\uff081 \u5206\u949f\u5185\u6700\u591a 30 \u6b21\uff09');
         throw new Error(err.detail || `HTTP ${response.status}`);
       }
 

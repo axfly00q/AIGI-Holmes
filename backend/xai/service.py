@@ -31,10 +31,12 @@ class XAIService:
         if self._model is not None:
             return
 
-        from backend.text_detect import _model, _tokenizer, DEVICE, TEXT_MAX_LENGTH
+        from backend.text_detect import _ensure_text_model, DEVICE, TEXT_MAX_LENGTH
+        import backend.text_detect as _td
 
-        self._model = _model
-        self._tokenizer = _tokenizer
+        _ensure_text_model()  # 确保已加载
+        self._model = _td._model
+        self._tokenizer = _td._tokenizer
         self._device = DEVICE
         self._max_length = TEXT_MAX_LENGTH
 

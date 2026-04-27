@@ -202,3 +202,63 @@ async def extract_images_from_file(filename: str, content: bytes) -> list[Image.
     if name.endswith(".docx"):
         return extract_images_from_docx(content)
     return []
+
+
+# ---------------------------------------------------------------------------
+# Text extraction from document files (for text AI detection)
+# ---------------------------------------------------------------------------
+
+def extract_text_from_pdf(content: bytes) -> str:
+    """Extract selectable text from a PDF using PyMuPDF.
+
+    Returns an empty string if the PDF contains no selectable text (e.g., scanned).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return ""
+
+    pages: list[str] = []
+    try:
+        doc = fitz.open(stream=content, filetype="pdf")
+        for page in doc:
+            text = page.get_text().strip()
+            if text:
+                pages.append(text)
+        doc.close()
+    except Exception:
+        return ""
+
+    return "\n\n".join(pages)
+
+
+def extract_text_from_docx(content: bytes) -> str:
+    """Extract all paragraph text from a DOCX file.
+
+    Returns an empty string on failure.
+    """
+    try:
+        import docx
+    except ImportError:
+        return ""
+
+    try:
+        document = docx.Document(io.BytesIO(content))
+        lines = [para.text for para in document.paragraphs if para.text.strip()]
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def extract_text_from_file(filename: str, content: bytes) -> str | None:
+    """Dispatch to the correct text extractor based on file extension.
+
+    Returns None for unsupported file types, empty string if supported but no
+    selectable text found.
+    """
+    name = filename.lower()
+    if name.endswith(".pdf"):
+        return extract_text_from_pdf(content)
+    if name.endswith(".docx"):
+        return extract_text_from_docx(content)
+    return None

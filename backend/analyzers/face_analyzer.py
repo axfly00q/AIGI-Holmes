@@ -59,6 +59,41 @@ def _get_cascade():
     return _cascade
 
 
+def _detect_faces_mediapipe(np_img_rgb: np.ndarray) -> "list[tuple[int,int,int,int]] | None":
+    """
+    使用 MediaPipe Face Detection 检测人脸。
+    返回 (x, y, w, h) 像素坐标列表；若 mediapipe 未安装，返回 None（触发 Haar 降级）。
+    """
+    try:
+        import mediapipe as mp
+        h, w = np_img_rgb.shape[:2]
+        with mp.solutions.face_detection.FaceDetection(
+            model_selection=1,       # 1 = full-range model，对各种距离均适用
+            min_detection_confidence=0.4,
+        ) as detector:
+            result = detector.process(np_img_rgb)
+
+        if not result.detections:
+            return []
+
+        boxes: list[tuple[int, int, int, int]] = []
+        for det in result.detections:
+            bb = det.location_data.relative_bounding_box
+            x  = max(0, int(bb.xmin * w))
+            y  = max(0, int(bb.ymin * h))
+            fw = min(int(bb.width  * w), w - x)
+            fh = min(int(bb.height * h), h - y)
+            if fw > 20 and fh > 20:
+                boxes.append((x, y, fw, fh))
+        return boxes
+
+    except ImportError:
+        return None   # 触发 Haar 降级
+    except Exception as exc:
+        logger.debug("MediaPipe face detection error: %s", exc)
+        return None
+
+
 def _clip_score_face_crop(pil_crop: "PILImage.Image") -> "float | None":
     """Run CLIP zero-shot deepfake scoring on a face crop.
 
@@ -169,22 +204,35 @@ def _analyze_sync(pil_image: "PILImage.Image") -> dict:
 
     try:
         img = pil_image.convert("RGB")
-        # Limit resolution for Haar speed
+        # Limit resolution for detection speed
         if max(img.size) > 640:
             img.thumbnail((640, 640))
         np_img = np.array(img)
         gray = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
 
-        cascade = _get_cascade()
-        faces = cascade.detectMultiScale(
-            gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
-        )
+        # ── 尝试 MediaPipe，降级到 Haar cascade ──────────────────────────────
+        mp_result = _detect_faces_mediapipe(np_img)
+        if mp_result is not None:
+            # MediaPipe 已安装且运行成功
+            face_boxes = mp_result
+            detector_name = "MediaPipe"
+        else:
+            # MediaPipe 不可用，使用改进参数的 Haar cascade
+            cascade = _get_cascade()
+            face_boxes_raw = cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.05,   # 更细的尺度步长
+                minNeighbors=4,     # 稍宽松，提高召回率
+                minSize=(30, 30),
+            )
+            face_boxes = [(int(x), int(y), int(w), int(h)) for (x, y, w, h) in face_boxes_raw]
+            detector_name = "Haar"
 
-        if len(faces) == 0:
+        if len(face_boxes) == 0:
             return _NEUTRAL
 
         combined_scores: list[float] = []
-        for (x, y, w, h) in faces:
+        for (x, y, w, h) in face_boxes:
             # Signal-processing score (grayscale crop)
             face_gray = gray[y:y + h, x:x + w]
             sig_score = _signal_score(face_gray)
@@ -205,11 +253,11 @@ def _analyze_sync(pil_image: "PILImage.Image") -> dict:
         n = len(combined_scores)
 
         if avg_score >= 70:
-            detail = f"检测到 {n} 张人脸，CLIP+信号分析特征符合真实照片"
+            detail = f"检测到 {n} 张人脸（{detector_name}），CLIP+信号分析特征符合真实照片"
         elif avg_score >= 40:
-            detail = f"检测到 {n} 张人脸，存在轻微异常（可能为深度伪造）"
+            detail = f"检测到 {n} 张人脸（{detector_name}），存在轻微异常（可能为深度伪造）"
         else:
-            detail = f"检测到 {n} 张人脸，CLIP+信号分析存在深度伪造迹象"
+            detail = f"检测到 {n} 张人脸（{detector_name}），CLIP+信号分析存在深度伪造迹象"
 
         return {"score": avg_score, "faces_found": n, "details": detail}
 

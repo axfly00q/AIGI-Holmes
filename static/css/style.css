@@ -1034,6 +1034,13 @@ details[open] > .explain-toggle::before { transform: rotate(90deg); }
 .batch-source-group[open] > summary::before { transform: rotate(90deg); }
 .batch-source-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px; }
 
+/* ── 文字检测结果卡片（批量检测 PDF/DOCX 文本内容）──────── */
+.text-detect-card { display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.text-detect-card.ai-generated { border-color: #fca5a5; background: #fff8f8; }
+.text-card-icon { display: flex; align-items: center; justify-content: center; font-size: 2.4rem; background: #f1f5f9; min-height: 100px; border-bottom: 1px solid #e2e8f0; }
+.text-detect-card.ai-generated .text-card-icon { background: #fef2f2; border-bottom-color: #fca5a5; }
+.text-card-preview { font-size: 0.78rem; color: #64748b; margin: 6px 0 0; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
+
 /* ── Login / Register modal ──────────────────────────────── */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);

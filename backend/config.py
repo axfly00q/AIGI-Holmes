@@ -16,12 +16,17 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # JWT
-    SECRET_KEY: str = "change-me-in-production"
+    # JWT — 生产环境必须在 .env 中设置非空的随机字符串
+    SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    ADMIN_ROLE_PASSWORD: str = "aigi"
+    ADMIN_ROLE_PASSWORD: str = ""
+
+    # CORS — 生产环境建议设置为实际域名，多个域名用英文逗号分隔
+    # 例如: ALLOWED_ORIGINS=https://example.com,https://www.example.com
+    # 留空或设为 * 表示允许所有来源（仅限本地开发）
+    ALLOWED_ORIGINS: str = "*"
 
     # Model
     MODEL_PATH: str = os.path.join(

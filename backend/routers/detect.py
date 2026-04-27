@@ -9,7 +9,7 @@ import json
 import os
 from functools import partial
 
-from fastapi import APIRouter, Depends, Query, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, Request, UploadFile, File, BackgroundTasks
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,7 @@ from backend.exceptions import ImageFormatError
 from backend.job_store import create_job, get_job, cleanup_job
 from backend.models.detection import DetectionRecord
 from backend.models.user import User
+from backend.rate_limit import limiter
 from detect import (
     MODEL_VERSION,
     async_download_image,
@@ -31,9 +32,10 @@ from detect import (
     detect_image,
     validate_public_url,
 )
-from detect_text import extract_images_from_file
+from detect_text import extract_images_from_file, extract_text_from_file
+from backend.text_detect import detect_text as _detect_text_content
 from backend.clip_classify import classify_image, classify_text_image_consistency
-from backend.analyzers import analyze_seal, analyze_frequency, analyze_edge, analyze_face, analyze_logo
+from backend.analyzers import analyze_seal, analyze_frequency, analyze_edge, analyze_face, analyze_logo, analyze_exif
 from backend.analyzers.composite import compute_overall
 
 router = APIRouter(prefix="/api", tags=["detection"])
@@ -137,7 +139,9 @@ def _image_sha256(raw: bytes) -> str:
 
 
 @router.post("/detect", response_model=DetectResponse)
+@limiter.limit("60/minute")   # 单 IP 每分钟最多 60 次
 async def api_detect(
+    request: Request,           # slowapi 需要 Request 对象
     image: UploadFile = File(...),
     cam: int = Query(0, description="Set to 1 to include Grad-CAM heatmap"),
     user: User | None = Depends(get_optional_user),
@@ -169,7 +173,9 @@ async def api_detect(
 
 
 @router.post("/detect-url", response_model=DetectUrlResponse)
+@limiter.limit("20/minute")   # URL 检测更重，限制更严
 async def api_detect_url(
+    request: Request,           # slowapi 需要 Request 对象
     body: DetectUrlRequest,
     user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
@@ -221,12 +227,13 @@ async def api_detect_url(
 
         thumb_task = loop.run_in_executor(None, _build_thumb, img)
 
-        # Run 4 new analyzers + logo in parallel
+        # Run 4 new analyzers + logo + exif in parallel
         seal_task = analyze_seal(img)
         freq_task = analyze_frequency(img)
         edge_task = analyze_edge(img)
         face_task = analyze_face(img)
         logo_task = analyze_logo(img)
+        exif_task = analyze_exif(img)
 
         # Text-image consistency
         consistency = None
@@ -234,21 +241,21 @@ async def api_detect_url(
             cons_task = loop.run_in_executor(
                 None, classify_text_image_consistency, img, page_summary or article_text[:200]
             )
-            det, category, b64, seal_result, freq_result, edge_result, face_result, logo_result, consistency = (
+            det, category, b64, seal_result, freq_result, edge_result, face_result, logo_result, exif_result, consistency = (
                 await asyncio.gather(
                     det_task, cat_task, thumb_task,
                     seal_task, freq_task, edge_task, face_task,
-                    logo_task,
+                    logo_task, exif_task,
                     cons_task,
                 )
             )
             consistency_scores.append(consistency["score"])
         else:
-            det, category, b64, seal_result, freq_result, edge_result, face_result, logo_result = (
+            det, category, b64, seal_result, freq_result, edge_result, face_result, logo_result, exif_result = (
                 await asyncio.gather(
                     det_task, cat_task, thumb_task,
                     seal_task, freq_task, edge_task, face_task,
-                    logo_task,
+                    logo_task, exif_task,
                 )
             )
 
@@ -277,6 +284,9 @@ async def api_detect_url(
             "face_score": round(face_result["score"], 1),
             "logo_detected": logo_result.get("detected_logo"),
             "logo_confidence": round(logo_result.get("logo_confidence", 0.0), 1),
+            "exif_score": round(exif_result.get("score", 50), 1),
+            "exif_software": exif_result.get("ai_software"),
+            "exif_details": exif_result.get("details"),
         }
         results.append(item)
         total_confidence += det["confidence"]
@@ -426,6 +436,8 @@ async def _process_batch_run(
 
     # Collect all (filename, pil_image, raw_bytes, source_file) tuples
     items: list[dict] = []
+    # Collect text items from PDF/DOCX for text AI detection
+    text_items: list[dict] = []
 
     for ud in uploads_data:
         filename = ud["filename"]
@@ -438,15 +450,22 @@ async def _process_batch_run(
             except Exception:
                 continue
         elif ud["is_text"]:
+            # --- 新增：先尝试提取文字（PDF / DOCX）---
+            extracted_text = extract_text_from_file(filename, raw)
+            if extracted_text is not None:
+                stripped = extracted_text.strip()
+                if len(stripped) > 20:
+                    # 截断到 50000 字符，与 /api/text/detect 保持一致
+                    text_items.append({
+                        "filename": filename,
+                        "source": filename,
+                        "text": stripped[:50000],
+                        "text_preview": stripped[:200],
+                    })
+
+            # --- 原有：提取嵌入图片 ---
             try:
                 extracted = await extract_images_from_file(filename, raw)
-                if not extracted:
-                    await queue.put({
-                        "type": "item_skip",
-                        "filename": filename,
-                        "reason": f"未从 {filename} 中提取到图片",
-                    })
-                    continue
                 for idx, pil in enumerate(extracted):
                     buf = io.BytesIO()
                     pil.save(buf, format="JPEG")
@@ -457,12 +476,17 @@ async def _process_batch_run(
                         "source": filename,
                     })
             except Exception:
+                pass
+
+            # 如果文字和图片都没提取到，提示跳过
+            if (extracted_text is None or len(extracted_text.strip()) <= 20) and not any(
+                it["source"] == filename for it in items
+            ):
                 await queue.put({
                     "type": "item_skip",
                     "filename": filename,
-                    "reason": f"提取 {filename} 中的图片时出错",
+                    "reason": f"未从 {filename} 中提取到文字或图片",
                 })
-                continue
         else:
             await queue.put({
                 "type": "item_skip",
@@ -471,8 +495,9 @@ async def _process_batch_run(
             })
             continue
 
-    # ── 逐一处理：每张图检测完立即推送结果 ──────────────────────────────
-    await queue.put({"type": "start", "total": len(items)})
+    # ── 逐一处理：每张图/每段文字检测完立即推送结果 ──────────────────
+    total = len(items) + len(text_items)
+    await queue.put({"type": "start", "total": total})
 
     loop = asyncio.get_running_loop()
 
@@ -484,7 +509,42 @@ async def _process_batch_run(
         return base64.b64encode(buf.getvalue()).decode()
 
     result_count = 0
-    for i, item in enumerate(items):
+    global_index = 0
+    img_index = 0  # 单独计图片序号，供前端显示用
+
+    # ── 先处理文字检测（文字卡排在来源分组顶部）──────────────────────
+    for text_item in text_items:
+        try:
+            text_result = await loop.run_in_executor(None, _detect_text_content, text_item["text"])
+        except Exception:
+            text_result = {
+                "label": "UNKNOWN",
+                "label_zh": "检测失败",
+                "confidence": 0.0,
+                "probs": [],
+            }
+        result_count += 1
+        await queue.put({
+            "type": "result_text",
+            "index": global_index,
+            "filename": text_item["filename"],
+            "source": text_item["source"],
+            "text_preview": text_item["text_preview"],
+            "result": {
+                "label": text_result.get("label", "UNKNOWN"),
+                "label_zh": text_result.get("label_zh", "未知"),
+                "confidence": round(text_result.get("confidence", 0.0), 1),
+                "probs": [
+                    {**p, "score": round(p["score"], 1)}
+                    for p in text_result.get("probs", [])
+                ],
+            },
+        })
+        global_index += 1
+        await asyncio.sleep(0)
+
+    # ── 再处理图片检测 ───────────────────────────────────────────────
+    for item in items:
         # 先查缓存
         cached = await get_cached_result(item["raw"])
         if cached:
@@ -506,7 +566,8 @@ async def _process_batch_run(
         # 立即推送当前图片的结果，前端马上渲染该卡片
         await queue.put({
             "type": "result",
-            "index": i,
+            "index": global_index,
+            "img_index": img_index,     # 图片专用序号（从 0 起），用于前端卡片编号
             "filename": item["filename"],
             "source": item["source"],
             "result": {
@@ -518,10 +579,12 @@ async def _process_batch_run(
                 "category": category,
             },
         })
+        global_index += 1
+        img_index += 1
         # 让事件循环有机会把 WS 消息发出去，再处理下一张
         await asyncio.sleep(0)
 
-    await queue.put({"type": "complete", "count": result_count})
+    await queue.put({"type": "complete", "count": result_count, "img_count": img_index})
     # job_store 的 10 分钟定时器会自动清理，这里不提前删除
     # 否则 WS 在处理完成后才建立时会拿到 None（403）
 

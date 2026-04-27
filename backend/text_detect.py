@@ -6,14 +6,18 @@ AIGI-Holmes 文本AI生成检测模块
 """
 
 import hashlib
+import logging
 import os
 import sys
+import threading
 from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # 基础配置
@@ -38,11 +42,25 @@ def _load_model():
         raise RuntimeError(f"Failed to load model {MODEL_NAME}: {e}")
 
 
-try:
-    _tokenizer, _model = _load_model()
-except Exception as e:
-    print(f"[TEXT_DETECT] FATAL: Failed to load model: {e}", flush=True)
-    raise
+# 懒加载全局变量：启动时不加载，首次调用时加载
+_tokenizer = None
+_model = None
+_model_loaded = False
+_model_lock = threading.Lock()
+
+
+def _ensure_text_model():
+    """线程安全懒加载：第一次调用时加载模型，后续直接返回"""
+    global _tokenizer, _model, _model_loaded
+    if _model_loaded:
+        return
+    with _model_lock:
+        if _model_loaded:
+            return
+        logger.info("[TEXT_DETECT] 开始加载文本检测模型 %s …", MODEL_NAME)
+        _tokenizer, _model = _load_model()
+        _model_loaded = True
+        logger.info("[TEXT_DETECT] 模型加载完成")
 
 
 def _compute_model_version() -> str:
@@ -56,6 +74,32 @@ MODEL_VERSION_HASH = _compute_model_version()
 # ---------------------------------------------------------------------------
 # 文本检测核心逻辑
 # ---------------------------------------------------------------------------
+
+def _detect_language(text: str) -> str:
+    """
+    检测文本语言，返回 ISO 639-1 语言代码（如 'en', 'zh-cn'）。
+    若 langdetect 未安装或检测失败，返回 'unknown'。
+    """
+    try:
+        from langdetect import detect as _ld_detect
+        return _ld_detect(text[:2000])   # 取前 2000 字符，足够判断
+    except Exception:
+        return "unknown"
+
+
+_LANG_ZH_MAP = {
+    "zh-cn": "中文（简体）",
+    "zh-tw": "中文（繁体）",
+    "ja": "日文",
+    "ko": "韩文",
+    "ar": "阿拉伯文",
+    "ru": "俄文",
+    "fr": "法文",
+    "de": "德文",
+    "es": "西班牙文",
+    "pt": "葡萄牙文",
+}
+
 
 def detect_text(text: str, return_tokens: bool = False) -> dict:
     """
@@ -77,6 +121,15 @@ def detect_text(text: str, return_tokens: bool = False) -> dict:
     """
     if not text or len(text.strip()) == 0:
         raise ValueError("输入文本不能为空")
+
+    # 确保模型已加载（懒加载）
+    _ensure_text_model()
+
+    # 语言检测 — 仅记录日志，不拦截（模型对非英文结果仅供参考）
+    lang = _detect_language(text.strip())
+    if lang != "unknown" and not lang.startswith("en"):
+        lang_name = _LANG_ZH_MAP.get(lang, lang)
+        logger.info("文本检测：检测到非英文输入（%s），当前模型仅对英文有效，结果仅供参考", lang_name)
 
     # 编码和推理（由 tokenizer 的 truncation=True 保证不超过模型上限）
     with torch.no_grad():

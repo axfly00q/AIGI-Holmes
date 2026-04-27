@@ -5,12 +5,11 @@ AIGI-Holmes backend — admin dashboard API routes.
 import asyncio
 import os
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select, and_, or_
+from sqlalchemy import func, select, and_, or_, case, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
@@ -22,62 +21,68 @@ from backend.models.user import User
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 @router.get("/stats")
-async def get_dashboard_stats(_=Depends(require_role("admin"))):
-    # 连接到数据库
-    async with aiosqlite.connect("aigi_holmes.db") as db:
-        # 总用户数
-        cursor = await db.execute("SELECT COUNT(*) FROM users")
-        total_users = (await cursor.fetchone())[0]
-        
-        # 总检测数
-        cursor = await db.execute("SELECT COUNT(*) FROM detection_records")
-        total_detections = (await cursor.fetchone())[0]
-        
-        # 今日检测数
-        cursor = await db.execute("SELECT COUNT(*) FROM detection_records WHERE DATE(created_at) = DATE('now')")
-        today_detections = (await cursor.fetchone())[0]
-        
-        # 最近7天每日检测量
-        daily_stats = []
-        for i in range(7):
-            cursor = await db.execute(
-                "SELECT DATE(created_at), COUNT(*) FROM detection_records WHERE DATE(created_at) = DATE('now', ?)",
-                (f"-{6-i} days",)
+async def get_dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_role("admin")),
+):
+    # 总用户数
+    total_users = await db.scalar(select(func.count()).select_from(User)) or 0
+
+    # 总检测数
+    total_detections = await db.scalar(select(func.count()).select_from(DetectionRecord)) or 0
+
+    # 今日检测数（UTC 日期，与数据库 server_default=func.now() 一致）
+    today = datetime.now(timezone.utc).date()
+    today_detections = await db.scalar(
+        select(func.count()).select_from(DetectionRecord).where(
+            func.date(DetectionRecord.created_at) == today.isoformat()
+        )
+    ) or 0
+
+    # 最近 7 天每日检测量
+    daily_stats = []
+    for i in range(7):
+        day = (datetime.now(timezone.utc).date() - timedelta(days=6 - i))
+        count = await db.scalar(
+            select(func.count()).select_from(DetectionRecord).where(
+                func.date(DetectionRecord.created_at) == day.isoformat()
             )
-            row = await cursor.fetchone()
-            date_str = (datetime.now().date() - timedelta(days=6-i)).strftime("%Y-%m-%d")
-            count = row[1] if row else 0
-            daily_stats.append({"date": date_str, "count": count})
-        
-        # 造假率 Top 5
-        cursor = await db.execute("""
-            SELECT image_url, COUNT(*) as total, 
-                   SUM(CASE WHEN confidence > 50 THEN 1 ELSE 0 END) as fake_count
-            FROM detection_records 
-            WHERE image_url IS NOT NULL 
-            GROUP BY image_url 
-            ORDER BY COUNT(*) DESC 
-            LIMIT 5
-        """)
-        rows = await cursor.fetchall()
-        scenes = []
-        for row in rows:
-            url = row[0]
-            total = row[1]
-            fake = row[2] or 0
-            fake_rate = round(fake / total * 100, 1) if total > 0 else 0
-            scenes.append({
-                "source": url[:50] + "..." if len(url) > 50 else url,
-                "total": total,
-                "fake_rate": fake_rate
-            })
-    
+        ) or 0
+        daily_stats.append({"date": day.strftime("%Y-%m-%d"), "count": count})
+
+    # 造假率 Top 5 — 按检测次数最多的 URL
+    rows = (await db.execute(
+        select(
+            DetectionRecord.image_url,
+            func.count().label("total"),
+            func.sum(
+                case((DetectionRecord.confidence > 50, 1), else_=0)
+            ).label("fake_count"),
+        )
+        .where(DetectionRecord.image_url.isnot(None))
+        .group_by(DetectionRecord.image_url)
+        .order_by(func.count().desc())
+        .limit(5)
+    )).all()
+
+    scenes = []
+    for row in rows:
+        url = row.image_url or ""
+        total = row.total or 0
+        fake = row.fake_count or 0
+        fake_rate = round(fake / total * 100, 1) if total > 0 else 0
+        scenes.append({
+            "source": url[:50] + "..." if len(url) > 50 else url,
+            "total": total,
+            "fake_rate": fake_rate,
+        })
+
     return {
         "total_users": total_users,
         "total_detections": total_detections,
         "today_detections": today_detections,
         "daily_stats": daily_stats,
-        "top_fake_scenes": scenes
+        "top_fake_scenes": scenes,
     }
 
 
