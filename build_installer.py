@@ -43,7 +43,7 @@ ICON_FILE     = ROOT / "asset" / "app.ico"
 RELEASE_DIR   = ROOT.parent / "AIGI-Holmes-release"  # 最终发布文件夹，与源码分离
 
 REQUIRED_PYTHON = (3, 9)
-APP_VERSION     = "2.0.0"   # keep in sync with installer.iss #define AppVersion
+APP_VERSION     = "3.0.0"   # keep in sync with installer.iss #define AppVersion
 
 # Common Inno Setup install locations
 _LOCAL_PROGRAMS = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs")

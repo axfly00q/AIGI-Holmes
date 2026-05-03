@@ -4,17 +4,21 @@
 
 <p><strong>新闻图片 AI 生成检测系统</strong> &nbsp;|&nbsp; <em>AI-Generated Image Detection for News Media</em></p>
 
+[![Release](https://img.shields.io/badge/Release-v3.0.0-blueviolet?logo=github)](https://github.com/axfly00q/AIGI-Holmes/releases/tag/v3.0.0)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](#方式一docker-部署推荐)
 [![License](https://img.shields.io/badge/License-MIT-brightgreen)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-0078D6?logo=windows&logoColor=white)](https://github.com/axfly00q/AIGI-Holmes)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%2010%2B-0078D6)](https://github.com/axfly00q/AIGI-Holmes)
 [![GitHub Stars](https://img.shields.io/github/stars/axfly00q/AIGI-Holmes?style=social)](https://github.com/axfly00q/AIGI-Holmes/stargazers)
 
 <br/>
 
 **一款面向新闻媒体核查场景的 AI 生成图片检测工具**  
 基于微调 ResNet-50 + CLIP 多模态分析，集成豆包 AI 可解释分析报告
+
+🆕 **v3.0.0 — Docker 版本**：完整的容器化部署方案，一条命令启动 FastAPI + PostgreSQL + Redis 全栈服务，跨平台开箱即用。
 
 <br/>
 
@@ -99,22 +103,48 @@
 
 ## 🚀 快速开始
 
-### 方式一：安装包（推荐，无需 Python）
+### 方式一：Docker 部署（推荐，v3.0.0 主推方案）
 
-> 适合普通用户、记者、内容审核人员
+> 适合服务器部署、跨平台用户、CI/CD 集成场景；一条命令拉起完整服务栈（FastAPI + PostgreSQL + Redis）。
 
-1. 前往 [Releases](https://github.com/axfly00q/AIGI-Holmes/releases) 下载最新 `AIGI-Holmes-Setup.exe`
-2. 双击运行安装向导（默认安装到 `C:\Program Files\AIGI-Holmes\`）
-3. 点击桌面快捷方式启动程序
+```bash
+# 1. 克隆仓库
+git clone https://github.com/axfly00q/AIGI-Holmes.git
+cd AIGI-Holmes
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env：填入 DOUBAO_API_KEY、JWT_SECRET 等
+
+# 3. 启动全栈服务（含 PostgreSQL + Redis）
+docker compose up -d
+
+# 4. 查看日志 / 健康状态
+docker compose logs -f aigi-holmes
+
+# 访问：http://localhost:7860
+```
 
 **系统要求：**
-- Windows 10 1809 (Build 17763) 及以上
-- Microsoft Edge WebView2（Windows 10/11 通常已内置）
-- 首次启动需 10～20 秒加载模型
+- Docker 24.0+ 与 Docker Compose v2
+- 至少 4 GB 可用内存（含数据库与缓存）
+- 可选：NVIDIA Container Toolkit（GPU 加速推理）
 
 ---
 
-### 方式二：源码运行（开发者）
+### 方式二：Windows 安装包（普通用户）
+
+> 适合记者、内容审核人员；无需 Python 环境。
+
+1. 前往 [Releases](https://github.com/axfly00q/AIGI-Holmes/releases) 下载 `AIGI-Holmes-Setup.exe`
+2. 双击运行安装向导（默认安装到 `C:\Program Files\AIGI-Holmes\`）
+3. 点击桌面快捷方式启动程序
+
+**系统要求：** Windows 10 1809 (Build 17763) 及以上 · Microsoft Edge WebView2 · 首次启动需 10～20 秒加载模型。
+
+---
+
+### 方式三：源码运行（开发者）
 
 ```bash
 # 1. 克隆仓库
@@ -141,22 +171,11 @@ uvicorn backend.main:app --host 127.0.0.1 --port 7860 --reload
 
 ---
 
-### 方式三：桌面窗口模式
+### 方式四：桌面窗口模式
 
 ```bash
 pip install pywebview
 python desktop_launcher.py
-```
-
----
-
-### 方式四：Docker 部署
-
-```bash
-# 启动（含 PostgreSQL + Redis）
-docker compose up -d
-
-# 访问：http://localhost:7860
 ```
 
 ---
@@ -218,6 +237,25 @@ WS    /ws/detect/{job_id}          # 批量检测进度推送
 ---
 
 ## 📦 部署与打包
+
+### Docker 镜像构建（v3.0.0 推荐）
+
+```bash
+# 构建镜像
+docker build -t aigi-holmes:3.0.0 .
+
+# 单容器运行（使用宿主 SQLite，最小化部署）
+docker run -d --name aigi-holmes \
+  -p 7860:7860 \
+  -v $(pwd)/.env:/app/.env \
+  -v $(pwd)/finetuned_fake_real_resnet50.pth:/app/finetuned_fake_real_resnet50.pth \
+  aigi-holmes:3.0.0
+
+# 全栈编排（含 PostgreSQL + Redis）
+docker compose up -d --build
+```
+
+### Windows 安装包打包
 
 > 需要 Python 3.10+、PyInstaller、Inno Setup 6
 
@@ -298,7 +336,28 @@ python _smoke_test_auth.py
 
 ---
 
-## 🙏 致谢
+## � 版本变更
+
+### v3.0.0 — Docker 版本（当前）
+
+- 🐳 **完整 Docker 化**：提供 `Dockerfile` 与 `docker-compose.yml`，一条命令拉起 FastAPI + PostgreSQL + Redis 全栈
+- 🌐 **跨平台支持**：从仅支持 Windows 桌面应用扩展为 Linux / macOS / Windows 全平台部署
+- ⚡ **生产就绪**：默认使用 PostgreSQL 持久化、Redis 缓存加速，适配多用户并发审查场景
+- 🔧 **GPU 加速可选**：支持 NVIDIA Container Toolkit，容器内自动调度 CUDA 推理
+- 📦 **保留 Windows 安装包**：v2.0.0 的 `AIGI-Holmes-Setup.exe` 单机安装链路完整保留
+
+### v2.0.0 — Windows 桌面版
+
+- 🖥️ pywebview + WebView2 桌面窗口
+- 📦 PyInstaller + Inno Setup 一键打包安装程序
+- 🔐 JWT 三级权限系统（user / auditor / admin）
+- 📄 PDF / Excel 报告导出
+
+完整变更记录见 [Releases](https://github.com/axfly00q/AIGI-Holmes/releases)。
+
+---
+
+## �🙏 致谢
 
 - [ResNet](https://arxiv.org/abs/1512.03385) — 图像特征提取骨干网络
 - [CLIP](https://github.com/openai/CLIP) — 多模态图文理解模型

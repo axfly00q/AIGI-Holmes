@@ -471,6 +471,6 @@ python 算法数据流图.py
 ---
 
 *生成日期*: 2025年4月9日  
-*项目版本*: AIGI-Holmes v2.0.0  
+*项目版本*: AIGI-Holmes v3.0.0  
 *文档作者*: GitHub Copilot 算法可视化团队  
 *许可证*: MIT License

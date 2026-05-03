@@ -5,7 +5,7 @@
 param(
     [string]$GitToken = "",
     [string]$GitUsername = "",
-    [string]$Version = "2.0.0"
+    [string]$Version = "3.0.0"
 )
 
 $ErrorActionPreference = "Stop"

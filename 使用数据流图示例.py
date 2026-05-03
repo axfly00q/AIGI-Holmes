@@ -389,7 +389,7 @@ display_all_figures_grid()"
 ---
 
 **生成时间**: 2025年4月  
-**项目**: AIGI-Holmes v2.0.0  
+**项目**: AIGI-Holmes v3.0.0  
 **格式**: PNG (DPI=300, A4适配)  
 """
     

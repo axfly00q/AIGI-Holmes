@@ -95,7 +95,7 @@ GitHub Release 页面显示问号（???）
 
 #### 方案 A：使用 Web 界面（最简单）
 
-1. GitHub → Releases → Edit v2.0.0
+1. GitHub → Releases → Edit v3.0.0
 2. 清空所有内容
 3. 从本地 README.md 复制新内容
 4. 保存
@@ -103,7 +103,7 @@ GitHub Release 页面显示问号（???）
 #### 方案 B：使用 GitHub CLI（推荐开发者）
 
 ```bash
-gh release edit v2.0.0 --notes-file README.md
+gh release edit v3.0.0 --notes-file README.md
 ```
 
 #### 方案 C：清除浏览器缓存

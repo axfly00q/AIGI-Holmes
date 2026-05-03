@@ -11,7 +11,7 @@
 ;         This creates  dist\AIGI-Holmes\  which is the source for this script.
 ;
 ;  Output:
-;      dist\AIGI-Holmes-Setup-v2.0.0.exe
+;      dist\AIGI-Holmes-Setup-v3.0.0.exe
 ;
 ;  What this installer does for the end-user:
 ;      • Copies all app files to  %LocalAppData%\AIGI-Holmes\   (no UAC needed)
@@ -23,7 +23,7 @@
 
 ; ------------- Compile-time defines ------------------------------------------
 #define AppName        "AIGI-Holmes"
-#define AppVersion     "2.0.0"
+#define AppVersion     "3.0.0"
 #define AppPublisher   "AIGI-Holmes Team"
 #define AppDescription "新闻图片 AI 生成检测系统"
 #define AppExeName     "AIGI-Holmes.exe"

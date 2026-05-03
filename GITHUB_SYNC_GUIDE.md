@@ -55,13 +55,13 @@ GitHub Release 页面显示问号（???）通常是由以下原因造成：
 # 需要先安装 GitHub CLI: https://cli.github.com/
 
 # 创建新的 Release（使用仓库的 README.md）
-gh release create v2.0.0 \
-  --title "AIGI-Holmes v2.0.0" \
+gh release create v3.0.0 \
+  --title "AIGI-Holmes v3.0.0" \
   --notes-file README.md \
-  AIGI-Holmes-v2.0.0-Windows.zip
+  AIGI-Holmes-v3.0.0-Windows.zip
 
 # 或编辑现有 Release
-gh release edit v2.0.0 \
+gh release edit v3.0.0 \
   --notes-file README.md
 ```
 
@@ -248,7 +248,7 @@ git push -u origin main
 1. 进入 Releases 页面
 2. 点击 Edit 编辑当前 Release
 3. 更新：
-   - Title: `AIGI-Holmes v2.0.0 - 编码修复版`
+   - Title: `AIGI-Holmes v3.0.0 - Docker 版本`
    - Description: 直接复制本地 README.md 的内容
 4. 保存 (Update release)
 
@@ -262,8 +262,8 @@ curl -X PATCH \
   -H "Accept: application/vnd.github+json" \
   https://api.github.com/repos/YOUR_USERNAME/AIGI-Holmes/releases/BY_TAG_ID \
   -d '{
-    "tag_name": "v2.0.0",
-    "name": "AIGI-Holmes v2.0.0 - 编码修复版",
+    "tag_name": "v3.0.0",
+    "name": "AIGI-Holmes v3.0.0 - Docker 版本",
     "body": "（粘贴 README.md 内容）",
     "draft": false,
     "prerelease": false

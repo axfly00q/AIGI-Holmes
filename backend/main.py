@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 # Application
 # ---------------------------------------------------------------------------
-app = FastAPI(title="AIGI-Holmes", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="AIGI-Holmes", version="3.0.0", lifespan=lifespan)
 
 # 速率限制
 app.state.limiter = limiter
