@@ -88,7 +88,7 @@ for param in model.parameters():
 model.fc = nn.Linear(model.fc.in_features, len(_train_classes))
 model = model.to(DEVICE)
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = Adam(model.fc.parameters(), lr=LEARNING_RATE)
 
 # ==== 6. 训练 ====

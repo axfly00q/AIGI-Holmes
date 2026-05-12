@@ -264,6 +264,27 @@ def analyze_cam_regions(cam_np: np.ndarray, img_w: int, img_h: int) -> dict:
     }
 
 
+def _extract_cam_boxes(cam_np: np.ndarray, img_w: int, img_h: int, threshold: float = 0.5) -> list[dict]:
+    """Return bounding box of the high-activation region in image pixel coordinates."""
+    high_mask = cam_np > threshold
+    if not high_mask.any():
+        return []
+    h_map, w_map = cam_np.shape
+    ys, xs = np.where(high_mask)
+    scale_x = img_w / w_map
+    scale_y = img_h / h_map
+    x0, x1 = int(xs.min()), int(xs.max())
+    y0, y1 = int(ys.min()), int(ys.max())
+    strength = round(float(cam_np[y0:y1 + 1, x0:x1 + 1].mean()), 3)
+    return [{
+        "x": round(x0 * scale_x),
+        "y": round(y0 * scale_y),
+        "w": round((x1 - x0 + 1) * scale_x),
+        "h": round((y1 - y0 + 1) * scale_y),
+        "strength": strength,
+    }]
+
+
 def generate_cam_clues(label: str, cam_np: np.ndarray, img_w: int, img_h: int) -> list[str]:
     """Generate spatially-aware, dynamic explanation clues from a Grad-CAM map.
 
@@ -471,6 +492,9 @@ def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
     # ── Step 4: optional overlay image — reuses cam_np, no extra backward ───
     cam_image = _build_cam_overlay(img_rgb, cam_np) if with_cam else None
 
+    # ── Step 5: VSFC bbox extraction ────────────────────────────────────────
+    cam_regions = _extract_cam_boxes(cam_np, *img_rgb.size)
+
     return {
         "label": top["label"],
         "label_zh": top["label_zh"],
@@ -478,6 +502,7 @@ def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
         "probs": results,
         "explanation": explanation,
         "cam_image": cam_image,
+        "cam_regions": cam_regions,
     }
 
 

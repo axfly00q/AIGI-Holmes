@@ -507,6 +507,22 @@ function renderResult(data) {
   }
   const rp=document.querySelector('.result-panel');
   if(rp){rp.style.alignItems='flex-start';rp.style.justifyContent='flex-start';}
+  // AI 取证报告（合并进检测依据区块）
+  const forensicDiv = $('forensicSection');
+  if(forensicDiv){
+    const fr = data.forensic_report;
+    if(fr && (fr.global || fr.evidence_anchored)){
+      const globalEl = $('frGlobalText');
+      const evidenceEl = $('frEvidenceText');
+      if(globalEl) globalEl.textContent = fr.global || '';
+      if(evidenceEl) evidenceEl.textContent = fr.evidence_anchored || '';
+      forensicDiv.hidden = false;
+      const es2 = $('explainSection');
+      if(es2) es2.hidden = false;
+    } else {
+      forensicDiv.hidden = true;
+    }
+  }
 }
 
 btnDetect.addEventListener('click', async ()=>{
@@ -545,17 +561,14 @@ btnDetect.addEventListener('click', async ()=>{
         $('quickActions').hidden=false;
       }
 
-      // ✅ 显示 AI 分析面板（仅在判定为 AI 生成时）
+      // ✅ 显示 AI 分析面板（所有检测结果均显示）
       currentDetectionId = data.detection_id || null;
-      if($('aiAnalysisPanel') && data.label === 'FAKE'){
+      if($('aiAnalysisPanel')){
         $('aiAnalysisPanel').hidden=false;
         resetAnalysisPanel();
-        // 加载该检测的历史记录（支持多轮对话）
         if (currentDetectionId) {
           loadAnalysisHistory(currentDetectionId);
         }
-      } else if($('aiAnalysisPanel')){
-        $('aiAnalysisPanel').hidden=true;
       }
     }
   }catch(e){

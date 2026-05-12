@@ -128,6 +128,96 @@ class DoubaoClient:
             logger.error(f"Doubao API exception: {type(e).__name__}: {e}")
             yield f"❌ 分析失败：{str(e)[:150]}"
 
+    async def generate_vsfc_report(
+        self,
+        detection_result: dict,
+        cam_regions: list[dict],
+        image_info: str = "",
+    ) -> dict:
+        """Two-layer VSFC evidence-anchored report (non-streaming).
+
+        Layer 1: global authenticity analysis.
+        Layer 2: region-specific artifact description anchored to cam_regions bbox.
+        Both calls are issued concurrently via asyncio.gather.
+
+        Returns {"global": str, "evidence_anchored": str}.
+        """
+        import json as _json
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        detection_summary = (
+            f"判定：{detection_result.get('label_zh', '未知')}，"
+            f"置信度：{detection_result.get('confidence', 0):.1f}%"
+        )
+        if image_info:
+            detection_summary += f"，{image_info}"
+
+        msgs_l1 = [
+            {
+                "role": "system",
+                "content": (
+                    "你是一位专业的AI图片检测分析师。请根据检测结果，"
+                    "对图片的真实性给出简明的全局分析（不超过150字）。"
+                ),
+            },
+            {"role": "user", "content": detection_summary},
+        ]
+
+        msgs_l2 = None
+        if cam_regions:
+            coords_str = "; ".join(
+                f"区域{i + 1}(x={b['x']},y={b['y']},w={b['w']},h={b['h']},强度={b['strength']})"
+                for i, b in enumerate(cam_regions)
+            )
+            msgs_l2 = [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是一位专业的AI图片取证分析师。"
+                        "模型Grad-CAM已标记出以下可疑伪影热点坐标区域，"
+                        "请仅针对这些区域描述其具体视觉异常（不超过120字），"
+                        "不要描述热点以外的区域。"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"检测结果：{detection_summary}\n热点区域：{coords_str}",
+                },
+            ]
+
+        async def _call(messages: list) -> str:
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    resp = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        json={"model": self.model, "messages": messages},
+                        headers=headers,
+                    )
+                    if resp.status_code == 200:
+                        return (
+                            resp.json()
+                            .get("choices", [{}])[0]
+                            .get("message", {})
+                            .get("content", "")
+                        )
+            except Exception as e:
+                logger.error(f"VSFC API call error: {e}")
+            return ""
+
+        if msgs_l2:
+            global_text, evidence_text = await asyncio.gather(
+                _call(msgs_l1), _call(msgs_l2)
+            )
+        else:
+            global_text = await _call(msgs_l1)
+            evidence_text = ""
+
+        return {"global": global_text, "evidence_anchored": evidence_text}
+
     async def validate_api_key(self) -> bool:
         """
         验证API密钥是否有效。

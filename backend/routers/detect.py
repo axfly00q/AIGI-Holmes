@@ -69,6 +69,8 @@ class DetectResponse(BaseModel):
     explanation: ExplanationItem | None = None
     cam_image: str | None = None
     detection_id: int | None = None
+    cam_regions: list[dict] | None = None
+    forensic_report: dict | None = None
 
 
 class UrlResultItem(BaseModel):
@@ -164,12 +166,26 @@ async def api_detect(
 
     result = await _run_detect(img, with_cam=bool(cam))
 
+    # VSFC: generate evidence-anchored forensic report when API key is available
+    forensic_report = None
+    cam_regions = result.get("cam_regions")
+    if cam_regions:
+        try:
+            from backend.config import get_settings
+            from backend.llm.doubao_client import DoubaoClient
+            _settings = get_settings()
+            if _settings.DOUBAO_API_KEY:
+                _dc = DoubaoClient(_settings.DOUBAO_API_KEY, model=_settings.DOUBAO_MODEL)
+                forensic_report = await _dc.generate_vsfc_report(result, cam_regions)
+        except Exception:
+            pass
+
     # cache & persist (cache without cam_image to save space)
     cache_data = {k: v for k, v in result.items() if k != "cam_image"}
     await set_cached_result(raw, cache_data)
     record = await _save_record(db, result, _image_sha256(raw), user)
 
-    return {**result, "detection_id": record.id}
+    return {**result, "detection_id": record.id, "forensic_report": forensic_report}
 
 
 @router.post("/detect-url", response_model=DetectUrlResponse)
