@@ -104,72 +104,75 @@ def draw_overall_architecture():
 
 
 def draw_single_image_detection():
-    fig, ax = plt.subplots(figsize=(14, 10))
+    # figsize=(10,8): 1单位坐标=1英寸，插入14cm文档后文字约11pt，清晰可读
+    fig, ax = plt.subplots(figsize=(10, 8))
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 10)
     ax.axis("off")
-    ax.text(5, 9.7, "单图检测算法数据流 (ResNet50 + Grad-CAM)", fontsize=16, fontweight="bold", ha="center")
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    ax.text(5, 9.7, "单图检测算法数据流 (ResNet50 + Grad-CAM)", fontsize=14, fontweight="bold", ha="center")
 
     stage1_y = 8.8
-    ax.add_patch(FancyBboxPatch((0.5, stage1_y - 0.4), 2, 0.8, boxstyle="round,pad=0.05", edgecolor="#1f77b4", facecolor="#E8F4F8", linewidth=2))
-    ax.add_patch(FancyBboxPatch((3.0, stage1_y - 0.4), 2, 0.8, boxstyle="round,pad=0.05", edgecolor="#17becf", facecolor="#E6F7FF", linewidth=2))
-    ax.add_patch(FancyBboxPatch((5.5, stage1_y - 0.4), 1.8, 0.8, boxstyle="round,pad=0.05", edgecolor="#17becf", facecolor="#E6F7FF", linewidth=2))
-    ax.add_patch(FancyBboxPatch((7.8, stage1_y - 0.4), 1.8, 0.8, boxstyle="round,pad=0.05", edgecolor="#2ca02c", facecolor="#E6FFE6", linewidth=2))
+    ax.add_patch(FancyBboxPatch((0.5, stage1_y - 0.4), 2, 0.8, boxstyle="round,pad=0.05", edgecolor="#1f77b4", facecolor="#E8F4F8", linewidth=1.5))
+    ax.add_patch(FancyBboxPatch((3.0, stage1_y - 0.4), 2, 0.8, boxstyle="round,pad=0.05", edgecolor="#17becf", facecolor="#E6F7FF", linewidth=1.5))
+    ax.add_patch(FancyBboxPatch((5.5, stage1_y - 0.4), 1.8, 0.8, boxstyle="round,pad=0.05", edgecolor="#17becf", facecolor="#E6F7FF", linewidth=1.5))
+    ax.add_patch(FancyBboxPatch((7.8, stage1_y - 0.4), 1.8, 0.8, boxstyle="round,pad=0.05", edgecolor="#2ca02c", facecolor="#E6FFE6", linewidth=1.5))
     ax.text(1.5, stage1_y, "图片输入\n(PIL Image)", ha="center", va="center", fontsize=10, fontweight="bold")
     ax.text(4.0, stage1_y, "1. RGB转换\n2. 缩放(224×224)", ha="center", va="center", fontsize=9)
-    ax.text(6.4, stage1_y, "张量化\nImageNet\n归一化", ha="center", va="center", fontsize=8)
+    ax.text(6.4, stage1_y, "张量化\nImageNet归一化", ha="center", va="center", fontsize=9)
     ax.text(8.7, stage1_y, "张量输出\n(1,3,224,224)", ha="center", va="center", fontsize=9)
     for s, e in [(2.5, 3.0), (5.0, 5.5), (7.3, 7.8)]:
-        ax.add_patch(FancyArrowPatch((s, stage1_y), (e, stage1_y), arrowstyle="->", mutation_scale=15, color="#1f77b4", linewidth=1.5))
-    ax.text(5, stage1_y + 0.7, "阶段1: 输入预处理", fontsize=11, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.7))
+        ax.add_patch(FancyArrowPatch((s, stage1_y), (e, stage1_y), arrowstyle="->", mutation_scale=12, color="#1f77b4", linewidth=1.2))
+    ax.text(5, stage1_y + 0.6, "阶段1: 输入预处理", fontsize=10, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.8))
 
     stage2_y = 7.3
-    ax.add_patch(FancyBboxPatch((1, stage2_y - 0.5), 3.5, 1, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=2))
-    ax.add_patch(FancyBboxPatch((5, stage2_y - 0.5), 2, 1, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=2))
-    ax.add_patch(FancyBboxPatch((7.5, stage2_y - 0.5), 2, 1, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=2))
-    ax.text(2.75, stage2_y, "ResNet50 主干网络\n(预训练权重微调)\n\nconv1 → layer1/2/3/4", ha="center", va="center", fontsize=10, fontweight="bold")
-    ax.text(6, stage2_y, "中间特征\n(layer4输出)\nshape:(1,2048,7,7)", ha="center", va="center", fontsize=8)
-    ax.text(8.5, stage2_y, "全连接层\n2048 → 2\n\n输出logits\n(1,2)", ha="center", va="center", fontsize=9)
-    ax.add_patch(FancyArrowPatch((8.7, stage1_y - 0.4), (2.75, stage2_y + 0.5), arrowstyle="->", mutation_scale=15, color="#d62728", linewidth=2))
-    ax.add_patch(FancyArrowPatch((4.5, stage2_y), (5, stage2_y), arrowstyle="->", mutation_scale=15, color="#d62728", linewidth=1.5))
-    ax.add_patch(FancyArrowPatch((7, stage2_y), (7.5, stage2_y), arrowstyle="->", mutation_scale=15, color="#d62728", linewidth=1.5))
-    ax.text(5, stage2_y + 0.8, "阶段2: 深度学习推理", fontsize=11, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.7))
+    ax.add_patch(FancyBboxPatch((1, stage2_y - 0.5), 3.5, 1, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=1.5))
+    ax.add_patch(FancyBboxPatch((5, stage2_y - 0.5), 2, 1, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=1.5))
+    ax.add_patch(FancyBboxPatch((7.5, stage2_y - 0.5), 2, 1, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=1.5))
+    ax.text(2.75, stage2_y, "ResNet50 主干网络\n(预训练权重微调)\nconv1 → layer1/2/3/4", ha="center", va="center", fontsize=10, fontweight="bold")
+    ax.text(6, stage2_y, "中间特征\n(layer4输出)\nshape:(1,2048,7,7)", ha="center", va="center", fontsize=9)
+    ax.text(8.5, stage2_y, "全连接层\n2048→2\n输出logits(1,2)", ha="center", va="center", fontsize=9)
+    ax.add_patch(FancyArrowPatch((8.7, stage1_y - 0.4), (2.75, stage2_y + 0.5), arrowstyle="->", mutation_scale=12, color="#d62728", linewidth=1.5))
+    ax.add_patch(FancyArrowPatch((4.5, stage2_y), (5, stage2_y), arrowstyle="->", mutation_scale=12, color="#d62728", linewidth=1.2))
+    ax.add_patch(FancyArrowPatch((7, stage2_y), (7.5, stage2_y), arrowstyle="->", mutation_scale=12, color="#d62728", linewidth=1.2))
+    ax.text(5, stage2_y + 0.75, "阶段2: 深度学习推理", fontsize=10, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.8))
 
     stage3_y = 5.5
-    ax.add_patch(FancyBboxPatch((1, stage3_y - 0.4), 2.5, 0.8, boxstyle="round,pad=0.05", edgecolor="#ff7f0e", facecolor="#FFF4E6", linewidth=2))
-    ax.add_patch(FancyBboxPatch((4, stage3_y - 0.4), 3, 0.8, boxstyle="round,pad=0.05", edgecolor="#ff7f0e", facecolor="#FFF4E6", linewidth=2))
-    ax.add_patch(FancyBboxPatch((7.3, stage3_y - 0.4), 2.3, 0.8, boxstyle="round,pad=0.05", edgecolor="#ff7f0e", facecolor="#FFF4E6", linewidth=2))
+    ax.add_patch(FancyBboxPatch((1, stage3_y - 0.4), 2.5, 0.8, boxstyle="round,pad=0.05", edgecolor="#ff7f0e", facecolor="#FFF4E6", linewidth=1.5))
+    ax.add_patch(FancyBboxPatch((4, stage3_y - 0.4), 3, 0.8, boxstyle="round,pad=0.05", edgecolor="#ff7f0e", facecolor="#FFF4E6", linewidth=1.5))
+    ax.add_patch(FancyBboxPatch((7.3, stage3_y - 0.4), 2.3, 0.8, boxstyle="round,pad=0.05", edgecolor="#ff7f0e", facecolor="#FFF4E6", linewidth=1.5))
     ax.text(2.25, stage3_y, "Softmax\n概率计算", ha="center", va="center", fontsize=10, fontweight="bold")
     ax.text(5.5, stage3_y, "FAKE: 45% | REAL: 55%\n置信度评估", ha="center", va="center", fontsize=9)
     ax.text(8.45, stage3_y, "规则化解释\n(置信度等级)", ha="center", va="center", fontsize=9)
-    ax.add_patch(FancyArrowPatch((9.5, stage2_y - 0.5), (2.25, stage3_y + 0.4), arrowstyle="->", mutation_scale=15, color="#ff7f0e", linewidth=2))
-    ax.add_patch(FancyArrowPatch((3.5, stage3_y), (4, stage3_y), arrowstyle="->", mutation_scale=15, color="#ff7f0e", linewidth=1.5))
-    ax.add_patch(FancyArrowPatch((7, stage3_y), (7.3, stage3_y), arrowstyle="->", mutation_scale=15, color="#ff7f0e", linewidth=1.5))
-    ax.text(5, stage3_y + 0.7, "阶段3: 结果获取", fontsize=11, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.7))
+    ax.add_patch(FancyArrowPatch((9.5, stage2_y - 0.5), (2.25, stage3_y + 0.4), arrowstyle="->", mutation_scale=12, color="#ff7f0e", linewidth=1.5))
+    ax.add_patch(FancyArrowPatch((3.5, stage3_y), (4, stage3_y), arrowstyle="->", mutation_scale=12, color="#ff7f0e", linewidth=1.2))
+    ax.add_patch(FancyArrowPatch((7, stage3_y), (7.3, stage3_y), arrowstyle="->", mutation_scale=12, color="#ff7f0e", linewidth=1.2))
+    ax.text(5, stage3_y + 0.65, "阶段3: 结果获取", fontsize=10, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.8))
 
     stage4_y = 3.8
-    ax.text(5, stage4_y + 0.8, "阶段4: Grad-CAM 可解释性分析（可选）", fontsize=11, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.7))
-    gradcam_steps = [("layer4\n收集梯度", 1.5), ("计算权重\nW=∂L/∂A", 3.2), ("加权求和\nCAM=ΣwA", 4.9), ("ReLU激活\nmax(CAM,0)", 6.6), ("双线性\n插值224×224", 8.3)]
+    ax.text(5, stage4_y + 0.75, "阶段4: Grad-CAM 可解释性分析（可选）", fontsize=10, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.8))
+    gradcam_steps = [("layer4\n收集梯度", 1.5), ("计算权重\nW=α·∂L/∂A", 3.2), ("加权求和\nCAM=ΣwA", 4.9), ("ReLU激活\nmax(CAM,0)", 6.6), ("双线性插值\n224×224", 8.3)]
     for i, (step, x) in enumerate(gradcam_steps):
         color = "#FFE6E6" if i % 2 == 0 else "#E6F7FF"
-        ax.add_patch(FancyBboxPatch((x - 0.6, stage4_y - 0.35), 1.2, 0.7, boxstyle="round,pad=0.03", edgecolor="#d62728", facecolor=color, linewidth=1.5))
-        ax.text(x, stage4_y, step, ha="center", va="center", fontsize=8)
+        ax.add_patch(FancyBboxPatch((x - 0.6, stage4_y - 0.35), 1.2, 0.7, boxstyle="round,pad=0.03", edgecolor="#d62728", facecolor=color, linewidth=1.2))
+        ax.text(x, stage4_y, step, ha="center", va="center", fontsize=8.5)
         if i < len(gradcam_steps) - 1:
-            ax.add_patch(FancyArrowPatch((x + 0.6, stage4_y), (x + 0.9, stage4_y), arrowstyle="->", mutation_scale=12, color="#d62728", linewidth=1.5))
-    ax.add_patch(FancyBboxPatch((1.5, stage4_y - 1.2), 7, 0.6, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=2))
+            ax.add_patch(FancyArrowPatch((x + 0.6, stage4_y), (x + 0.9, stage4_y), arrowstyle="->", mutation_scale=10, color="#d62728", linewidth=1.2))
+    ax.add_patch(FancyBboxPatch((1.5, stage4_y - 1.2), 7, 0.6, boxstyle="round,pad=0.05", edgecolor="#d62728", facecolor="#FFE6E6", linewidth=1.5))
     ax.text(5, stage4_y - 0.9, "热力图输出：overlay热力图到原图 → Base64 JPEG编码", ha="center", va="center", fontsize=9, fontweight="bold")
 
     stage5_y = 1.5
-    output_items = ["标签\n(FAKE/REAL)", "置信度\n(0-100%)", "概率分布\n[p_fake, p_real]", "热力图\n(Base64)", "文本解释\n(规则库)"]
+    output_items = ["标签\n(FAKE/REAL)", "置信度\n(0-100%)", "概率分布\n[p_fake,p_real]", "热力图\n(Base64)", "文本解释\n(规则库)"]
     for i, item in enumerate(output_items):
         x = 1 + i * 1.8
-        ax.add_patch(FancyBboxPatch((x - 0.7, stage5_y - 0.35), 1.4, 0.7, boxstyle="round,pad=0.05", edgecolor="#2ca02c", facecolor="#E6FFE6", linewidth=2))
-        ax.text(x, stage5_y, item, ha="center", va="center", fontsize=8, fontweight="bold")
-        ax.add_patch(FancyArrowPatch((x, stage4_y - 1.2), (x, stage5_y + 0.35), arrowstyle="->", mutation_scale=12, color="#2ca02c", linewidth=1.5))
-    ax.text(5, stage5_y + 1, "阶段5: 结构化输出", fontsize=11, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.7))
-    ax.text(0.3, 0.3, "核心函数: detect_image() | 热力图函数: grad_cam_overlay()", fontsize=9, style="italic", bbox=dict(boxstyle="round", facecolor="#CCCCCC", alpha=0.5))
+        ax.add_patch(FancyBboxPatch((x - 0.7, stage5_y - 0.35), 1.4, 0.7, boxstyle="round,pad=0.05", edgecolor="#2ca02c", facecolor="#E6FFE6", linewidth=1.5))
+        ax.text(x, stage5_y, item, ha="center", va="center", fontsize=8.5, fontweight="bold")
+        ax.add_patch(FancyArrowPatch((x, stage4_y - 1.2), (x, stage5_y + 0.35), arrowstyle="->", mutation_scale=10, color="#2ca02c", linewidth=1.2))
+    ax.text(5, stage5_y + 0.9, "阶段5: 结构化输出", fontsize=10, fontweight="bold", bbox=dict(boxstyle="round", facecolor="#FFFFCC", alpha=0.8))
+    ax.text(0.2, 0.25, "核心函数: detect_image()  |  热力图函数: grad_cam_overlay()", fontsize=8.5, style="italic", bbox=dict(boxstyle="round", facecolor="#CCCCCC", alpha=0.5))
 
-    plt.tight_layout()
+    plt.tight_layout(pad=0.3)
     return fig
 
 

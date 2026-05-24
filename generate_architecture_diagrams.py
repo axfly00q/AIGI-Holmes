@@ -614,9 +614,9 @@ def draw_dataflow():
     fig.patch.set_facecolor("white")
 
     ax.text(11, 15.65, "AIGI-Holmes  项目全局数据流图",
-            ha="center", va="top", fontsize=16, weight="bold", color="#1A237E")
+            ha="center", va="top", fontsize=20, weight="bold", color="#1A237E")
     ax.text(11, 15.2, "从用户输入到最终检测结果的完整数据流向",
-            ha="center", va="top", fontsize=10, color="#607D8B")
+            ha="center", va="top", fontsize=13, color="#607D8B")
 
     # ═════════════════════════
     #  竖向泳道
@@ -634,18 +634,18 @@ def draw_dataflow():
                               edgecolor="#CFD8DC", linewidth=0.8, alpha=0.35, zorder=0)
         ax.add_patch(rect)
         ax.text(lx + lw / 2, 14.7, lt, ha="center", va="bottom",
-                fontsize=10, weight="bold", color="#37474F")
+                fontsize=13, weight="bold", color="#37474F")
 
     # ═════════════════════════
     # 行1: 认证流程 (y~12)
     # ═════════════════════════
-    ax.text(0.5, 13.85, "① 认证流", fontsize=9, color="#1A237E", weight="bold")
-    fancy_box(ax, 0.4, 12.5, 3.0, 1.0, "用户\n(浏览器)", COLORS["user"], COLORS["border_blue"], fontsize=9)
-    fancy_box(ax, 4.1, 12.5, 3.0, 1.0, "登录/注册表单\napp.js", COLORS["frontend"], COLORS["border_green"], fontsize=8.5)
-    fancy_box(ax, 7.8, 12.5, 3.0, 1.0, "POST /api/auth\n/login", COLORS["api"], COLORS["border_orange"], fontsize=8.5)
-    fancy_box(ax, 11.5, 12.5, 3.0, 1.0, "bcrypt验证\npasslib", COLORS["auth"], COLORS["border_indigo"], fontsize=8.5)
-    fancy_box(ax, 15.2, 12.5, 3.0, 1.0, "JWT生成\naccess+refresh\n令牌", COLORS["auth"], COLORS["border_indigo"], fontsize=8)
-    fancy_box(ax, 19.0, 12.5, 2.8, 1.0, "User表\nSQLite", COLORS["db"], COLORS["border_blue"], fontsize=8.5)
+    ax.text(0.5, 13.85, "① 认证流", fontsize=12, color="#1A237E", weight="bold")
+    fancy_box(ax, 0.4, 12.5, 3.0, 1.0, "用户\n(浏览器)", COLORS["user"], COLORS["border_blue"], fontsize=12)
+    fancy_box(ax, 4.1, 12.5, 3.0, 1.0, "登录/注册表单\napp.js", COLORS["frontend"], COLORS["border_green"], fontsize=11)
+    fancy_box(ax, 7.8, 12.5, 3.0, 1.0, "POST /api/auth\n/login", COLORS["api"], COLORS["border_orange"], fontsize=11)
+    fancy_box(ax, 11.5, 12.5, 3.0, 1.0, "bcrypt验证\npasslib", COLORS["auth"], COLORS["border_indigo"], fontsize=11)
+    fancy_box(ax, 15.2, 12.5, 3.0, 1.0, "JWT生成\naccess+refresh\n令牌", COLORS["auth"], COLORS["border_indigo"], fontsize=11)
+    fancy_box(ax, 19.0, 12.5, 2.8, 1.0, "User表\nSQLite", COLORS["db"], COLORS["border_blue"], fontsize=11)
     for x1, x2 in [(3.4, 4.1), (7.1, 7.8), (10.8, 11.5), (14.5, 15.2), (18.2, 19.0)]:
         arrow(ax, x1, 13.0, x2, 13.0, color=COLORS["arrow"])
     arrow(ax, 18.2, 13.0, 4.1, 13.0, color="#EF5350", lw=1.2, label="JWT返回")
@@ -653,13 +653,13 @@ def draw_dataflow():
     # ═════════════════════════
     # 行2: 单图检测流程 (y~10)
     # ═════════════════════════
-    ax.text(0.5, 11.75, "② 单图检测流", fontsize=9, color="#2E7D32", weight="bold")
-    fancy_box(ax, 0.4, 10.3, 3.0, 1.1, "上传图片\n拖拽/选择", COLORS["user"], COLORS["border_blue"], fontsize=8.5)
-    fancy_box(ax, 4.1, 10.3, 3.0, 1.1, "FormData构建\n预览·格式验证", COLORS["frontend"], COLORS["border_green"], fontsize=8)
-    fancy_box(ax, 7.8, 10.3, 3.0, 1.1, "POST /api/detect\ncam=0|1", COLORS["api"], COLORS["border_orange"], fontsize=8.5)
-    fancy_box(ax, 11.5, 10.3, 3.0, 1.1, "Redis缓存\nSHA-256命中检查", COLORS["cache"], COLORS["border_purple"], fontsize=8)
-    fancy_box(ax, 15.2, 10.3, 3.0, 1.1, "ResNet50推理\nFAKE/REAL概率", COLORS["model"], COLORS["border_pink"], fontsize=8)
-    fancy_box(ax, 19.0, 10.3, 2.8, 1.1, "DetectionRecord\n写入SQLite", COLORS["db"], COLORS["border_blue"], fontsize=8)
+    ax.text(0.5, 11.75, "② 单图检测流", fontsize=12, color="#2E7D32", weight="bold")
+    fancy_box(ax, 0.4, 10.3, 3.0, 1.1, "上传图片\n拖拽/选择", COLORS["user"], COLORS["border_blue"], fontsize=11)
+    fancy_box(ax, 4.1, 10.3, 3.0, 1.1, "FormData构建\n预览·格式验证", COLORS["frontend"], COLORS["border_green"], fontsize=11)
+    fancy_box(ax, 7.8, 10.3, 3.0, 1.1, "POST /api/detect\ncam=0|1", COLORS["api"], COLORS["border_orange"], fontsize=11)
+    fancy_box(ax, 11.5, 10.3, 3.0, 1.1, "Redis缓存\nSHA-256命中检查", COLORS["cache"], COLORS["border_purple"], fontsize=11)
+    fancy_box(ax, 15.2, 10.3, 3.0, 1.1, "ResNet50推理\nFAKE/REAL概率", COLORS["model"], COLORS["border_pink"], fontsize=11)
+    fancy_box(ax, 19.0, 10.3, 2.8, 1.1, "DetectionRecord\n写入SQLite", COLORS["db"], COLORS["border_blue"], fontsize=11)
 
     for x1, x2 in [(3.4, 4.1), (7.1, 7.8), (10.8, 11.5), (14.5, 15.2), (18.2, 19.0)]:
         arrow(ax, x1, 10.85, x2, 10.85, color=COLORS["arrow"])
@@ -669,34 +669,34 @@ def draw_dataflow():
     arrow_curve(ax, 12.0, 10.3, 4.1, 10.6, rad=-0.15, color="#9C27B0", lw=1.2, label="缓存命中")
 
     # Grad-CAM分支
-    fancy_box(ax, 15.2, 8.8, 3.0, 1.1, "Grad-CAM\nlayer4热力图\nbase64编码", COLORS["xai"], COLORS["border_teal"], fontsize=8)
+    fancy_box(ax, 15.2, 8.8, 3.0, 1.1, "Grad-CAM\nlayer4热力图\nbase64编码", COLORS["xai"], COLORS["border_teal"], fontsize=11)
     arrow(ax, 16.7, 10.3, 16.7, 9.9, color=COLORS["arrow_light"], lw=1.2, label="cam=1")
 
     # 结果回流
-    fancy_box(ax, 4.1, 8.8, 3.0, 1.1, "渲染结果\n标签+置信度\nCAM+XAI说明", COLORS["frontend"], COLORS["border_green"], fontsize=8)
+    fancy_box(ax, 4.1, 8.8, 3.0, 1.1, "渲染结果\n标签+置信度\nCAM+XAI说明", COLORS["frontend"], COLORS["border_green"], fontsize=11)
     arrow(ax, 15.2, 9.35, 7.1, 9.35, color="#2196F3", lw=1.5, label="JSON响应")
     arrow(ax, 7.1, 9.35, 4.1 + 3.0, 9.35, color="#2196F3", lw=1.5)
 
     # ═════════════════════════
     # 行3: URL检测流程 (y~7)
     # ═════════════════════════
-    ax.text(0.5, 8.35, "③ URL检测流", fontsize=9, color="#E65100", weight="bold")
-    fancy_box(ax, 0.4, 7.0, 3.0, 1.0, "输入新闻URL\n文章链接", COLORS["user"], COLORS["border_blue"], fontsize=8.5)
-    fancy_box(ax, 4.1, 7.0, 3.0, 1.0, "URL输入框\napp.js", COLORS["frontend"], COLORS["border_green"], fontsize=8.5)
-    fancy_box(ax, 7.8, 7.0, 3.0, 1.0, "POST\n/api/detect-url", COLORS["api"], COLORS["border_orange"], fontsize=8.5)
-    fancy_box(ax, 11.5, 7.0, 3.0, 1.0, "抓取页面\nhttpx异步\n提取所有图片URL", COLORS["backend"], COLORS["border_purple"], fontsize=7.5)
-    fancy_box(ax, 15.2, 7.0, 3.0, 1.0, "并发推理\nResNet50批量\n+CLIP分类", COLORS["model"], COLORS["border_pink"], fontsize=8)
-    fancy_box(ax, 19.0, 7.0, 2.8, 1.0, "六维度分析\n综合评分\ncomposite.py", COLORS["analyzer"], COLORS["border_amber"], fontsize=8)
+    ax.text(0.5, 8.35, "③ URL检测流", fontsize=12, color="#E65100", weight="bold")
+    fancy_box(ax, 0.4, 7.0, 3.0, 1.0, "输入新闻URL\n文章链接", COLORS["user"], COLORS["border_blue"], fontsize=11)
+    fancy_box(ax, 4.1, 7.0, 3.0, 1.0, "URL输入框\napp.js", COLORS["frontend"], COLORS["border_green"], fontsize=11)
+    fancy_box(ax, 7.8, 7.0, 3.0, 1.0, "POST\n/api/detect-url", COLORS["api"], COLORS["border_orange"], fontsize=11)
+    fancy_box(ax, 11.5, 7.0, 3.0, 1.0, "抓取页面\nhttpx异步\n提取所有图片URL", COLORS["backend"], COLORS["border_purple"], fontsize=10)
+    fancy_box(ax, 15.2, 7.0, 3.0, 1.0, "并发推理\nResNet50批量\n+CLIP分类", COLORS["model"], COLORS["border_pink"], fontsize=11)
+    fancy_box(ax, 19.0, 7.0, 2.8, 1.0, "六维度分析\n综合评分\ncomposite.py", COLORS["analyzer"], COLORS["border_amber"], fontsize=11)
 
     for x1, x2 in [(3.4, 4.1), (7.1, 7.8), (10.8, 11.5), (14.5, 15.2), (18.2, 19.0)]:
         arrow(ax, x1, 7.5, x2, 7.5, color=COLORS["arrow"])
 
     # Bing搜图分支
-    fancy_box(ax, 19.0, 5.8, 2.8, 0.9, "Bing/Serper\n反向图片搜索\n验证真实性", COLORS["cache"], COLORS["border_purple"], fontsize=7.5)
+    fancy_box(ax, 19.0, 5.8, 2.8, 0.9, "Bing/Serper\n反向图片搜索\n验证真实性", COLORS["cache"], COLORS["border_purple"], fontsize=10)
     arrow(ax, 20.4, 7.0, 20.4, 6.7, color=COLORS["arrow_light"], lw=1.2)
 
     # 结果回流
-    fancy_box(ax, 4.1, 5.8, 3.0, 0.9, "结果网格\n可信度徽章\n摘要说明", COLORS["frontend"], COLORS["border_green"], fontsize=8)
+    fancy_box(ax, 4.1, 5.8, 3.0, 0.9, "结果网格\n可信度徽章\n摘要说明", COLORS["frontend"], COLORS["border_green"], fontsize=11)
     arrow(ax, 19.0, 7.5, 7.1, 7.5, color="#2196F3", lw=1.2, label="JSON结果数组")
     arrow(ax, 7.1, 7.5, 7.1, 6.25, color="#2196F3", lw=1.2)
     arrow(ax, 7.1, 6.25, 7.1, 6.25, color="#2196F3", lw=1.2)
@@ -705,18 +705,18 @@ def draw_dataflow():
     # ═════════════════════════
     # 行4: 批量检测流程 (y~4.2)
     # ═════════════════════════
-    ax.text(0.5, 5.35, "④ 批量检测流", fontsize=9, color="#1565C0", weight="bold")
-    fancy_box(ax, 0.4, 4.0, 3.0, 1.0, "拖拽文件夹\n多文件", COLORS["user"], COLORS["border_blue"], fontsize=8.5)
-    fancy_box(ax, 4.1, 4.0, 3.0, 1.0, "文件过滤·\nXHR上传\n+进度条", COLORS["frontend"], COLORS["border_green"], fontsize=8)
-    fancy_box(ax, 7.8, 4.0, 3.0, 1.0, "POST init\nWS连接\n/ws/batch", COLORS["api"], COLORS["border_orange"], fontsize=8)
-    fancy_box(ax, 11.5, 4.0, 3.0, 1.0, "JobStore\n任务队列\n状态跟踪", COLORS["backend"], COLORS["border_purple"], fontsize=8)
-    fancy_box(ax, 15.2, 4.0, 3.0, 1.0, "逐项推理\ndetect_batch()\n异步线程池", COLORS["model"], COLORS["border_pink"], fontsize=8)
-    fancy_box(ax, 19.0, 4.0, 2.8, 1.0, "WS推送\nresult消息\n实时返回", COLORS["websocket"], COLORS["border_sky"], fontsize=8)
+    ax.text(0.5, 5.35, "④ 批量检测流", fontsize=12, color="#1565C0", weight="bold")
+    fancy_box(ax, 0.4, 4.0, 3.0, 1.0, "拖拽文件夹\n多文件", COLORS["user"], COLORS["border_blue"], fontsize=11)
+    fancy_box(ax, 4.1, 4.0, 3.0, 1.0, "文件过滤·\nXHR上传\n+进度条", COLORS["frontend"], COLORS["border_green"], fontsize=11)
+    fancy_box(ax, 7.8, 4.0, 3.0, 1.0, "POST init\nWS连接\n/ws/batch", COLORS["api"], COLORS["border_orange"], fontsize=11)
+    fancy_box(ax, 11.5, 4.0, 3.0, 1.0, "JobStore\n任务队列\n状态跟踪", COLORS["backend"], COLORS["border_purple"], fontsize=11)
+    fancy_box(ax, 15.2, 4.0, 3.0, 1.0, "逐项推理\ndetect_batch()\n异步线程池", COLORS["model"], COLORS["border_pink"], fontsize=11)
+    fancy_box(ax, 19.0, 4.0, 2.8, 1.0, "WS推送\nresult消息\n实时返回", COLORS["websocket"], COLORS["border_sky"], fontsize=11)
 
     for x1, x2 in [(3.4, 4.1), (7.1, 7.8), (10.8, 11.5), (14.5, 15.2), (18.2, 19.0)]:
         arrow(ax, x1, 4.5, x2, 4.5, color=COLORS["arrow"])
 
-    fancy_box(ax, 4.1, 2.8, 3.0, 0.85, "结果卡片\n瀑布流展示", COLORS["frontend"], COLORS["border_green"], fontsize=8)
+    fancy_box(ax, 4.1, 2.8, 3.0, 0.85, "结果卡片\n瀑布流展示", COLORS["frontend"], COLORS["border_green"], fontsize=11)
     arrow(ax, 20.4, 4.0, 20.4, 3.25, color="#2196F3", lw=1.2)
     arrow(ax, 20.4, 3.25, 7.1, 3.25, color="#2196F3", lw=1.2, label="WS消息流")
     arrow(ax, 7.1, 3.25, 4.1 + 3.0, 3.25, color="#2196F3", lw=1.2)
@@ -724,7 +724,7 @@ def draw_dataflow():
     # ═════════════════════════
     # 底部公共组件
     # ═════════════════════════
-    ax.text(0.5, 2.5, "⑤ 公共基础设施", fontsize=9, color="#880E4F", weight="bold")
+    ax.text(0.5, 2.5, "⑤ 公共基础设施", fontsize=12, color="#880E4F", weight="bold")
     common = [
         (0.4,  0.5, 3.0, 1.7, "Redis缓存层\nget_cached_result\nset_cached_result\nTTL=300s",
          COLORS["cache"], COLORS["border_purple"]),
@@ -740,7 +740,7 @@ def draw_dataflow():
          COLORS["report"], COLORS["border_brown"]),
     ]
     for cx, cy, cw, ch, ct, cc, cec in common:
-        fancy_box(ax, cx, cy, cw, ch, ct, cc, cec, fontsize=7.5)
+        fancy_box(ax, cx, cy, cw, ch, ct, cc, cec, fontsize=10)
 
     # 图例
     legend_items = [
@@ -754,7 +754,7 @@ def draw_dataflow():
         (mpatches.Patch(facecolor=COLORS["xai"],       edgecolor=COLORS["border_teal"]),   "XAI/分析器"),
     ]
     handles, labels = zip(*legend_items)
-    ax.legend(handles, labels, loc="lower right", fontsize=8,
+    ax.legend(handles, labels, loc="lower right", fontsize=11,
               framealpha=0.9, edgecolor="#CFD8DC", ncol=2)
 
     save(fig, "05_dataflow.png")

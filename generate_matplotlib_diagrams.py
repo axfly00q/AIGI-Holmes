@@ -42,10 +42,10 @@ class DiagramGenerator:
         ax.axis("off")
         ax.set_xlim(0, 16)
         ax.set_ylim(0, 10)
-        ax.text(8, 9.55, title, ha="center", va="center", fontsize=18, fontweight="bold", color=COLORS["text"])
+        ax.text(8, 9.55, title, ha="center", va="center", fontsize=22, fontweight="bold", color=COLORS["text"])
         return fig, ax
 
-    def _box(self, ax, x, y, w, h, text, fill, edge, fontsize=10, bold=True):
+    def _box(self, ax, x, y, w, h, text, fill, edge, fontsize=13, bold=True):
         patch = FancyBboxPatch(
             (x - w / 2, y - h / 2),
             w,
@@ -102,10 +102,10 @@ class DiagramGenerator:
             (13.4, 4.8, "模块5\n结果可视化", COLORS["pink_fill"], COLORS["pink_edge"]),
         ]
         for x, y, text, fill, edge in modules:
-            self._box(ax, x, y, 2.1, 1.0, text, fill, edge, fontsize=11)
+            self._box(ax, x, y, 2.1, 1.0, text, fill, edge, fontsize=13)
             self._arrow(ax, 8.0, 7.25, x, 5.35, COLORS["gray_edge"], 1.8)
 
-        self._box(ax, 8.0, 2.0, 11.8, 1.0, "整体链路：用户输入 -> 路由分发 -> 核心模块协同 -> 写库 / 缓存 -> 页面展示与报告导出", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=11)
+        self._box(ax, 8.0, 2.0, 11.8, 1.0, "整体链路：用户输入 -> 路由分发 -> 核心模块协同 -> 写库 / 缓存 -> 页面展示与报告导出", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=13)
         self._save(fig, "00_五模块总体数据流总览.png")
 
     def generate_model_loading(self):
@@ -171,7 +171,7 @@ class DiagramGenerator:
         self._arrow(ax, 12.0, 4.25, 5.2, 2.65, COLORS["green_edge"], 1.8)
         self._arrow(ax, 12.0, 4.25, 10.8, 2.65, COLORS["pink_edge"], 1.8)
 
-        self._box(ax, 8.0, 0.8, 10.2, 0.9, "输出：label、label_zh、confidence、probs、explanation、可选 cam_image、detection_id", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=11)
+        self._box(ax, 8.0, 0.8, 10.2, 0.9, "输出：label、label_zh、confidence、probs、explanation、可选 cam_image、detection_id", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=13)
         self._save(fig, "02_单图检测模块数据流.png")
 
     def generate_url_processing(self):
@@ -204,7 +204,7 @@ class DiagramGenerator:
         self._arrow(ax, 4.2, 1.7, 8.0, 1.7, COLORS["orange_edge"], 2.0)
         self._arrow(ax, 8.0, 1.7, 11.8, 1.7, COLORS["purple_edge"], 2.0)
 
-        self._box(ax, 8.0, 0.55, 11.5, 0.8, "输出：results、page_title、page_summary、dimensions、overall_score，并逐图写入数据库", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=11)
+        self._box(ax, 8.0, 0.55, 11.5, 0.8, "输出：results、page_title、page_summary、dimensions、overall_score，并逐图写入数据库", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=13)
         self._save(fig, "03_URL处理模块数据流.png")
 
     def generate_batch_processing(self):
@@ -232,7 +232,7 @@ class DiagramGenerator:
         self._arrow(ax, 14.0, 4.35, 4.6, 2.45, COLORS["green_edge"], 1.8)
         self._arrow(ax, 4.6, 1.35, 11.2, 1.35, COLORS["green_edge"], 2.0)
 
-        self._box(ax, 8.0, 0.45, 11.2, 0.75, "输出：批量检测实时事件流，前端可逐张渲染结果卡片与进度状态", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=11)
+        self._box(ax, 8.0, 0.45, 11.2, 0.75, "输出：批量检测实时事件流，前端可逐张渲染结果卡片与进度状态", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=13)
         self._save(fig, "04_批量检测模块数据流.png")
 
     def generate_visualization(self):
@@ -256,11 +256,117 @@ class DiagramGenerator:
         self._arrow(ax, 14.0, 7.05, 11.4, 5.05, COLORS["blue_edge"], 1.8)
         self._arrow(ax, 14.0, 7.05, 14.0, 5.05, COLORS["blue_edge"], 1.8)
 
-        self._box(ax, 8.0, 1.6, 11.6, 1.0, "输出：页面可读解释、Grad-CAM 可视化图片、数据库记录，以及 PDF / Excel 导出能力", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=11)
+        self._box(ax, 8.0, 1.6, 11.6, 1.0, "输出：页面可读解释、Grad-CAM 可视化图片、数据库记录，以及 PDF / Excel 导出能力", COLORS["gray_fill"], COLORS["gray_edge"], fontsize=13)
         self._save(fig, "05_结果可视化模块数据流.png")
+
+    def generate_system_architecture(self):
+        """重新绘制整体系统架构图，5层水平布局，无叠盖。"""
+        fig, ax = plt.subplots(figsize=(18, 11))
+        fig.patch.set_facecolor(COLORS["bg"])
+        ax.set_facecolor(COLORS["bg"])
+        ax.axis("off")
+        ax.set_xlim(0, 18)
+        ax.set_ylim(0, 11)
+
+        # 标题
+        ax.text(9, 10.55, "AIGI-Holmes 系统整体架构与数据流",
+                ha="center", va="center", fontsize=22, fontweight="bold", color=COLORS["text"])
+
+        # ── 辅助函数 ──────────────────────────────────────────
+        def box(x, y, w, h, text, fill, edge, fs=13):
+            patch = FancyBboxPatch(
+                (x - w/2, y - h/2), w, h,
+                boxstyle="round,pad=0.1,rounding_size=0.12",
+                linewidth=2, edgecolor=edge, facecolor=fill)
+            ax.add_patch(patch)
+            ax.text(x, y, text, ha="center", va="center",
+                    fontsize=fs, fontweight="bold", color=COLORS["text"])
+
+        def label(x, y, text):
+            ax.text(x, y, text, ha="left", va="center",
+                    fontsize=11, color="#6b7280",
+                    bbox=dict(boxstyle="round,pad=0.2", fc="#e5e7eb", ec="none"))
+
+        def arrow(x1, y1, x2, y2, col, lw=2.0):
+            ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
+                        arrowprops={"arrowstyle": "->", "lw": lw, "color": col})
+
+        # ── 层1：用户接口层 (y=9.3) ───────────────────────────
+        label(0.2, 9.3, "① 用户\n   接口层")
+        box(4.0,  9.3, 3.0, 0.9, "桌面应用\nPyWebView",      COLORS["blue_fill"],   COLORS["blue_edge"])
+        box(9.0,  9.3, 3.0, 0.9, "网页应用\nHTML + 原生 JS",  COLORS["blue_fill"],   COLORS["blue_edge"])
+        box(14.0, 9.3, 3.0, 0.9, "API 接口\nREST",            COLORS["blue_fill"],   COLORS["blue_edge"])
+
+        # ── 层2：接入层 FastAPI (y=7.7) ──────────────────────
+        label(0.2, 7.7, "② 接入\n   路由层")
+        box(9.0, 7.7, 7.0, 1.0, "FastAPI 后端  uvicorn:7860\n异步路由 · 速率限制 · 权限校验",
+            COLORS["orange_fill"], COLORS["orange_edge"], fs=13)
+
+        # 层1 → 层2 箭头
+        for x in [4.0, 9.0, 14.0]:
+            arrow(x, 8.85, 9.0, 8.2, COLORS["blue_edge"])
+
+        # ── 层3：路由端点 (y=6.1) ────────────────────────────
+        label(0.2, 6.1, "③ 端点\n   路由层")
+        route_items = [
+            (3.0,  "POST /api/detect\n单图检测"),
+            (7.0,  "POST /api/detect-url\nURL 检测"),
+            (11.0, "WS /ws/detect/{job_id}\n实时进度推送"),
+            (15.0, "POST /api/report/generate\n报告生成导出"),
+        ]
+        for rx, rt in route_items:
+            box(rx, 6.1, 3.2, 0.9, rt, COLORS["green_fill"], COLORS["green_edge"], fs=11)
+            arrow(9.0, 7.2, rx, 6.55, COLORS["orange_edge"], 1.6)
+
+        # ── 层4：算法核心层 (y=4.3) ──────────────────────────
+        label(0.2, 4.3, "④ 算法\n   核心层")
+        algo_items = [
+            (2.2,  "ResNet50\n微调模型\nFAKE/REAL",      COLORS["blue_fill"],   COLORS["blue_edge"]),
+            (5.5,  "CLIP\n多模态分类\n7 个类别",          COLORS["orange_fill"], COLORS["orange_edge"]),
+            (9.0,  "Grad-CAM\n热力图\n可解释性",          COLORS["green_fill"],  COLORS["green_edge"]),
+            (12.5, "多维分析器\nseal·freq·edge\nface·logo", COLORS["purple_fill"], COLORS["purple_edge"]),
+            (15.8, "LLM 分析\n辅助结论\n自然语言",        COLORS["pink_fill"],   COLORS["pink_edge"]),
+        ]
+        for ax_, text, fill, edge in algo_items:
+            box(ax_, 4.3, 2.8, 1.3, text, fill, edge, fs=12)
+
+        # 路由 → 算法 箭头（从最近路由端点连线）
+        route_x = [3.0, 7.0, 11.0, 15.0]
+        algo_x  = [2.2, 5.5,  9.0, 12.5, 15.8]
+        connections = [(0, 0), (1, 1), (2, 2), (2, 3), (3, 4)]
+        for ri, ai in connections:
+            arrow(route_x[ri], 5.65, algo_x[ai], 4.95, COLORS["green_edge"], 1.5)
+
+        # ── 层5：数据存储层 (y=2.4) ──────────────────────────
+        label(0.2, 2.4, "⑤ 数据\n   存储层")
+        storage_items = [
+            (3.0,  "数据库\nSQLite + 异步驱动\n检测记录 / 用户数据",  COLORS["gray_fill"],  COLORS["gray_edge"]),
+            (7.5,  "缓存系统\nRedis + SHA-256\n缓存与复用",           COLORS["pink_fill"],  COLORS["pink_edge"]),
+            (12.0, "模型仓库\n.pth 权重文件",                          COLORS["blue_fill"],  COLORS["blue_edge"]),
+            (16.0, "6 维综合评分\n输出 0–100",                         COLORS["purple_fill"],COLORS["purple_edge"]),
+        ]
+        for sx, text, fill, edge in storage_items:
+            box(sx, 2.4, 3.2, 1.2, text, fill, edge, fs=12)
+
+        # 算法 → 存储 箭头
+        store_links = [(2.2, 3.0), (5.5, 7.5), (9.0, 7.5), (12.5, 12.0), (15.8, 16.0)]
+        for ax_, sx in store_links:
+            arrow(ax_, 3.65, sx, 3.0, COLORS["gray_edge"], 1.4)
+
+        # ── 底部流向说明 ──────────────────────────────────────
+        ax.add_patch(FancyBboxPatch(
+            (1.5, 0.5), 15, 0.75,
+            boxstyle="round,pad=0.1,rounding_size=0.1",
+            linewidth=1.5, edgecolor=COLORS["gray_edge"], facecolor=COLORS["gray_fill"]))
+        ax.text(9, 0.88, "数据流向：用户输入 → 路由分发 → 模型推理 → 数据存储 → 结果反馈",
+                ha="center", va="center", fontsize=13, color=COLORS["text"])
+
+        fig.tight_layout(pad=0.5)
+        self._save(fig, "01_整体系统架构与数据流.png")
 
     def generate_all(self):
         print(f"输出目录: {self.output_dir}")
+        self.generate_system_architecture()
         self.generate_overview()
         self.generate_model_loading()
         self.generate_single_detection()

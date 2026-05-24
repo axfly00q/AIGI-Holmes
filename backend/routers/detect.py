@@ -40,6 +40,9 @@ from backend.analyzers.composite import compute_overall
 
 router = APIRouter(prefix="/api", tags=["detection"])
 
+# 内存缓存：detection_id → cam_image data-URI（服务重启后失效，供同次会话内的 AI 对话使用）
+_cam_image_cache: dict[int, str] = {}
+
 
 # ── request / response schemas ───────────────────────────────────────────
 
@@ -176,7 +179,9 @@ async def api_detect(
             _settings = get_settings()
             if _settings.DOUBAO_API_KEY:
                 _dc = DoubaoClient(_settings.DOUBAO_API_KEY, model=_settings.DOUBAO_MODEL)
-                forensic_report = await _dc.generate_vsfc_report(result, cam_regions)
+                forensic_report = await _dc.generate_vsfc_report(
+                    result, cam_regions, image_base64=result.get("cam_image", "")
+                )
         except Exception:
             pass
 
@@ -184,6 +189,9 @@ async def api_detect(
     cache_data = {k: v for k, v in result.items() if k != "cam_image"}
     await set_cached_result(raw, cache_data)
     record = await _save_record(db, result, _image_sha256(raw), user)
+    # 缓存 cam_image 供后续对话接口使用
+    if result.get("cam_image"):
+        _cam_image_cache[record.id] = result["cam_image"]
 
     return {**result, "detection_id": record.id, "forensic_report": forensic_report}
 
@@ -718,11 +726,14 @@ async def api_analyze_detection(
 
                     has_content = False
                     doubao_stream_error = None
+                    # 优先取内存缓存的 cam_image（上传图片），其次是网络图片 URL
+                    _img_ref = _cam_image_cache.get(detection_id) or record.image_url or ""
                     async for chunk in client.stream_analysis(
                         user_question=question,
                         detection_result=record_dict,
                         image_info=f"来源URL: {record.image_url}" if record.image_url else "",
                         conversation_history=conversation_history,
+                        image_base64=_img_ref,
                     ):
                         has_content = True
                         # 检查是否收到错误消息（来自 doubao_client 的错误处理）
