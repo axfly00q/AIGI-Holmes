@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIGI-Holmes 项目架构图集</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d2e;
+      --border: #2e3250;
+      --accent: #6366f1;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6366f1, #a855f7, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: var(--muted);
+      margin-bottom: 3rem;
+      font-size: 0.95rem;
+    }
+    .toc {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 3rem;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .toc h2 {
+      font-size: 1rem;
+      color: var(--accent);
+      margin-bottom: 1rem;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .toc ol {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.3rem 2rem;
+      padding-left: 1.2rem;
+    }
+    .toc li { color: var(--muted); font-size: 0.9rem; }
+    .toc a { color: var(--muted); text-decoration: none; }
+    .toc a:hover { color: var(--text); }
+    .section {
+      max-width: 1100px;
+      margin: 0 auto 4rem;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .section-num {
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      color: #fff;
+      border-radius: 50%;
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+    .section h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .badge {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      font-weight: 600;
+      letter-spacing: .05em;
+    }
+    .badge-macro { background: rgba(99,102,241,.2); color: #818cf8; border: 1px solid rgba(99,102,241,.3); }
+    .badge-micro { background: rgba(59,130,246,.2); color: #60a5fa; border: 1px solid rgba(59,130,246,.3); }
+    .badge-flow  { background: rgba(34,197,94,.2);  color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+    .badge-algo  { background: rgba(245,158,11,.2); color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+    .badge-db    { background: rgba(239,68,68,.2);  color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+    .desc {
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin-bottom: 1.25rem;
+      padding-left: 2.75rem;
+    }
+    .diagram-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      overflow-x: auto;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 3rem 0;
+    }
+  </style>
+</head>
+<body>
+
+<h1>AIGI-Holmes 项目架构图集</h1>
+<p class="subtitle">多维度 · 宏观到微观 · 共 10 张图 — 前端逻辑 / 后端算法 / 全链路数据流</p>
+
+<nav class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#s1">系统架构总览图（宏观）</a></li>
+    <li><a href="#s2">前端 UI 状态机与交互逻辑</a></li>
+    <li><a href="#s3">前端组件结构图（微观）</a></li>
+    <li><a href="#s4">后端 API 路由与中间件设计</a></li>
+    <li><a href="#s5">AI 核心检测算法流程图</a></li>
+    <li><a href="#s6">多维度分析器算法设计图</a></li>
+    <li><a href="#s7">全局端到端数据流图</a></li>
+    <li><a href="#s8">单图检测完整数据流</a></li>
+    <li><a href="#s9">新闻URL批量检测数据流</a></li>
+    <li><a href="#s10">数据库模型与认证权限设计</a></li>
+  </ol>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 1. 系统架构总览图 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s1">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <h2>系统架构总览图</h2>
+    <span class="badge badge-macro">宏观</span>
+  </div>
+  <p class="desc">展示 AIGI-Holmes 的五大层次：用户层、前端层、API 网关层、业务逻辑层、数据存储层，以及各层之间的通信协议。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+graph TB
+    subgraph USER["👤 用户层"]
+        B1["浏览器\n(Chrome / Edge)"]
+        B2["桌面客户端\n(PyInstaller EXE)"]
+    end
+
+    subgraph FRONTEND["🖥️ 前端层  ·  Vanilla HTML + JS + CSS"]
+        F1["index.html\n主页面模板"]
+        F2["app.js\n单一入口脚本 ~1000行"]
+        F3["style.css\n全局样式 ~700行"]
+    end
+
+    subgraph GATEWAY["🔗 API 网关层  ·  FastAPI + CORS"]
+        G1["JWT 鉴权中间件"]
+        G2["CORS 中间件"]
+        G3["异常统一处理"]
+    end
+
+    subgraph BACKEND["⚙️ 业务逻辑层  ·  FastAPI Routers"]
+        R1["/api/detect\n单图检测"]
+        R2["/api/detect-url\nURL新闻页面"]
+        R3["/api/detect-batch\n批量文件检测"]
+        R4["/api/auth\n认证注册登录"]
+        R5["/api/report\n报告导出"]
+        R6["/api/history\n检测历史"]
+        R7["/ws/detect/{job_id}\nWebSocket进度流"]
+        R8["/api/text-detect\n文本检测"]
+    end
+
+    subgraph AI["🧠 AI 推理层"]
+        AI1["ResNet50\n微调二分类模型"]
+        AI2["Grad-CAM\n热力图可视化"]
+        AI3["CLIP ViT-B/32\n内容分类零样本"]
+        AI4["规则引擎\n文本解释生成"]
+        AI5["6维度分析器\n综合评分"]
+        AI6["XAI服务\nLIME + SHAP"]
+    end
+
+    subgraph DATA["💾 数据存储层"]
+        D1["SQLite\n(异步 aiosqlite)"]
+        D2["Redis\n结果缓存"]
+        D3["文件系统\n模型权重 .pth"]
+    end
+
+    B1 & B2 -->|"HTTP / WS"| FRONTEND
+    FRONTEND -->|"REST API\nfetch()"| GATEWAY
+    FRONTEND -->|"WebSocket\nws://"| R7
+    GATEWAY --> R1 & R2 & R3 & R4 & R5 & R6 & R8
+    R1 & R2 & R3 --> AI
+    R8 --> AI6
+    AI --> DATA
+    R4 --> D1
+    R5 & R6 --> D1
+    R1 & R2 & R3 -->|"缓存查/写"| D2
+
+    style USER fill:#1e1b4b,stroke:#4c1d95,color:#c4b5fd
+    style FRONTEND fill:#082f49,stroke:#0369a1,color:#bae6fd
+    style GATEWAY fill:#14532d,stroke:#15803d,color:#bbf7d0
+    style BACKEND fill:#1c1917,stroke:#78716c,color:#d6d3d1
+    style AI fill:#431407,stroke:#c2410c,color:#fed7aa
+    style DATA fill:#134e4a,stroke:#0f766e,color:#99f6e4
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 2. 前端 UI 状态机 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s2">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <h2>前端 UI 状态机与交互逻辑</h2>
+    <span class="badge badge-micro">微观</span>
+  </div>
+  <p class="desc">描述前端在不同用户操作下的状态转换：初始化 → 认证 → 选择检测类型 → 执行检测 → 展示结果，以及每个状态下的 UI 行为。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+stateDiagram-v2
+    [*] --> 初始化
+
+    初始化 --> 未登录 : DOMContentLoaded\ninitUI() / checkAuth()
+    初始化 --> 已登录 : 本地存储有效Token
+
+    state 未登录 {
+        [*] --> 显示登录按钮
+        显示登录按钮 --> 登录弹窗 : 点击登录
+        登录弹窗 --> 注册弹窗 : 切换注册
+        注册弹窗 --> 登录弹窗 : 切换登录
+        登录弹窗 --> [*] : 登录成功\nPOST /api/auth/login
+        注册弹窗 --> [*] : 注册成功\nPOST /api/auth/register
+    }
+
+    已登录 --> 选择检测模式 : 渲染用户信息\n更新批量权限
+
+    state 选择检测模式 {
+        [*] --> 单图检测Tab
+        单图检测Tab --> URL检测Tab : 点击Tab
+        URL检测Tab --> 批量检测Tab : 点击Tab（需auditor+）
+        批量检测Tab --> 单图检测Tab : 点击Tab
+        单图检测Tab --> URL检测Tab : 切换
+        URL检测Tab --> 批量检测Tab : 切换
+    }
+
+    state 单图检测流程 {
+        等待上传 --> 预览图片 : 拖拽/选择文件
+        预览图片 --> 提交检测 : 点击"检测"按钮
+        提交检测 --> 加载中 : POST /api/detect
+        加载中 --> 展示结果 : 返回JSON
+        展示结果 --> 显示热力图 : cam=1\n生成Grad-CAM
+        展示结果 --> 显示概率条 : label+confidence
+        展示结果 --> 显示解释文本 : explanation对象
+    }
+
+    state URL检测流程 {
+        输入URL --> 抓取页面 : 提交\nPOST /api/detect-url
+        抓取页面 --> 解析图片列表 : async_fetch_page_content
+        解析图片列表 --> 批量推理 : detect_batch
+        批量推理 --> 综合评分 : compute_overall
+        综合评分 --> 展示图片卡片网格 : UrlResultItem[]
+    }
+
+    state 批量检测流程 {
+        Landing拖拽区 --> 初始化Job : POST /api/detect-batch-init
+        初始化Job --> 建立WebSocket : WS /ws/detect/{job_id}
+        建立WebSocket --> 上传文件XHR : XHR + 进度回调
+        上传文件XHR --> 接收WS事件 : 服务端推送
+        接收WS事件 --> 更新进度条 : type=item/result
+        更新进度条 --> 渲染结果卡片 : type=result
+        渲染结果卡片 --> 完成 : type=complete
+    }
+
+    选择检测模式 --> 单图检测流程 : 进入单图Tab
+    选择检测模式 --> URL检测流程 : 进入URL Tab
+    选择检测模式 --> 批量检测流程 : 进入批量Tab
+
+    单图检测流程 --> 已登录 : 重置/清除
+    URL检测流程 --> 已登录 : 重置
+    批量检测流程 --> 已登录 : resetBatchZone()
+    已登录 --> 未登录 : 退出登录\n清除Token
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 3. 前端组件结构图 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s3">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <h2>前端组件结构图（微观）</h2>
+    <span class="badge badge-micro">微观</span>
+  </div>
+  <p class="desc">展示 index.html 的 DOM 层次结构，以及 app.js 中各功能模块的职责划分和依赖关系。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+graph TD
+    subgraph DOM["DOM 结构  (index.html)"]
+        ROOT["&lt;body&gt;"]
+        ROOT --> HEADER["#navbar\n顶部导航栏"]
+        ROOT --> MAIN["#main-content\n主内容区"]
+        ROOT --> MODALS["Modal 层"]
+
+        HEADER --> NAV_LOGO["logo + 标题"]
+        HEADER --> NAV_AUTH["登录按钮 / 用户信息"]
+        HEADER --> NAV_TABS["检测模式 Tabs"]
+
+        MAIN --> TAB1["#tab-single\n单图检测区"]
+        MAIN --> TAB2["#tab-url\nURL检测区"]
+        MAIN --> TAB3["#tab-batch\n批量检测区"]
+
+        TAB1 --> T1_DROP["#dropzone\n拖拽上传区"]
+        TAB1 --> T1_PREV["#preview\n图片预览"]
+        TAB1 --> T1_BTN["#detectBtn\n检测按钮"]
+        TAB1 --> T1_RESULT["#result-panel\n结果面板"]
+        T1_RESULT --> T1_LABEL["#result-label\nFAKE/REAL标签"]
+        T1_RESULT --> T1_CONF["#confidence-bar\n置信度进度条"]
+        T1_RESULT --> T1_CAM["#cam-image\nGrad-CAM热力图"]
+        T1_RESULT --> T1_EXPLAIN["#explanation\n文字解释"]
+
+        TAB2 --> T2_INPUT["#urlInput\nURL输入框"]
+        TAB2 --> T2_BTN["#urlDetectBtn\n检测按钮"]
+        TAB2 --> T2_GALLERY["#urlGallery\n图片网格"]
+        TAB2 --> T2_SCORE["#overall-score\n综合评分"]
+
+        TAB3 --> T3_LANDING["#batch-landing\n初始拖拽区"]
+        TAB3 --> T3_BAR["#batch-bar\n收缩控制条"]
+        TAB3 --> T3_GALLERY["#batchGallery\n结果网格"]
+        T3_BAR --> T3_UP["uploadProgressBar"]
+        T3_BAR --> T3_DET["detectProgressBar"]
+
+        MODALS --> MOD_LOGIN["#loginModal"]
+        MODALS --> MOD_REG["#registerModal"]
+        MODALS --> MOD_DETAIL["#detailModal\n详情弹窗"]
+    end
+
+    subgraph JS["app.js 功能模块"]
+        JS_INIT["initUI()\nDOMContentLoaded 入口"]
+        JS_AUTH["认证模块\nlogin / register\n/ logout / refreshToken"]
+        JS_SINGLE["单图检测模块\ninitDropzone()\nhandleSingleDetect()"]
+        JS_URL["URL检测模块\nhandleUrlDetect()"]
+        JS_BATCH["批量检测模块\ninitBatchZone()\nhandleBatchFiles()\nresetBatchZone()"]
+        JS_RENDER["渲染工具\nrenderResult()\nrenderUrlResults()\nbuildCard()"]
+        JS_WS["WebSocket模块\nws.onmessage\nws.onerror\nws.onclose"]
+        JS_UTIL["工具函数\n$(id) 快捷选择器\n_ACCEPTED_RE 文件过滤\nformatPct()"]
+
+        JS_INIT --> JS_AUTH
+        JS_INIT --> JS_SINGLE
+        JS_INIT --> JS_URL
+        JS_INIT --> JS_BATCH
+        JS_SINGLE --> JS_RENDER
+        JS_URL --> JS_RENDER
+        JS_BATCH --> JS_WS
+        JS_BATCH --> JS_RENDER
+        JS_WS --> JS_RENDER
+        JS_AUTH --> JS_UTIL
+        JS_RENDER --> JS_UTIL
+    end
+
+    style DOM fill:#082f49,stroke:#0369a1,color:#bae6fd
+    style JS fill:#1c1917,stroke:#78716c,color:#e7e5e4
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 4. 后端 API 路由与中间件设计 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s4">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <h2>后端 API 路由与中间件设计</h2>
+    <span class="badge badge-macro">宏观</span>
+  </div>
+  <p class="desc">展示 FastAPI 应用的路由层次、中间件链、依赖注入体系，以及各端点的权限要求。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+graph LR
+    CLIENT(["客户端\nHTTP/WS"])
+
+    subgraph MW["中间件链  Middleware Stack"]
+        MW1["CORSMiddleware\nallow_origins=*"]
+        MW2["JWT 解码\ndependencies.py"]
+        MW3["异常转换\nexceptions.py\nImageFormatError → 422"]
+    end
+
+    subgraph ROUTER["路由层  APIRouter"]
+        direction TB
+        subgraph AUTH_R["auth.py\n/api/auth"]
+            A1["POST /register"]
+            A2["POST /login"]
+            A3["POST /refresh"]
+            A4["PATCH /admin/users/{u}/role\n[admin only]"]
+        end
+        subgraph DET_R["detect.py\n/api"]
+            D1["POST /detect\n[optional user]"]
+            D2["POST /detect-url\n[optional user]"]
+            D3["POST /detect-batch-init\n[auditor/admin]"]
+            D4["GET /detect-batch-status/{job_id}\n[auditor/admin]"]
+        end
+        subgraph WS_R["ws.py"]
+            W1["WS /ws/detect/{job_id}\n?token=JWT"]
+        end
+        subgraph OTHER["其他路由"]
+            O1["report.py\nGET /api/report/{id}/export"]
+            O2["history.py\nGET /api/history"]
+            O3["feedback.py\nPOST /api/feedback"]
+            O4["search.py\nGET /api/search"]
+            O5["text_detect.py\nPOST /api/text-detect"]
+            O6["admin.py\nGET /api/admin/users"]
+        end
+    end
+
+    subgraph DEP["依赖注入  Dependencies"]
+        DEP1["get_db()\nAsyncSession"]
+        DEP2["get_optional_user()\n解析JWT可为空"]
+        DEP3["require_role('auditor')\n角色断言"]
+        DEP4["require_role('admin')\n管理员断言"]
+    end
+
+    CLIENT --> MW1 --> MW2 --> MW3
+    MW3 --> AUTH_R & DET_R & WS_R & OTHER
+    D1 & D2 --> DEP2
+    D3 & D4 --> DEP3
+    A4 & O6 --> DEP4
+    AUTH_R & DET_R & OTHER --> DEP1
+
+    style MW fill:#14532d,stroke:#15803d,color:#bbf7d0
+    style ROUTER fill:#1c1917,stroke:#78716c,color:#e7e5e4
+    style DEP fill:#431407,stroke:#c2410c,color:#fed7aa
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 5. AI 核心检测算法流程图 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s5">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <h2>AI 核心检测算法流程图</h2>
+    <span class="badge badge-algo">算法</span>
+  </div>
+  <p class="desc">深入展示 detect.py 中 ResNet50 推理管线：图像预处理 → 前向传播 → Softmax → 置信度 → Grad-CAM反向传播 → 热力图叠加 → 规则解释生成。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+flowchart TD
+    INPUT(["PIL Image 输入"])
+
+    subgraph PREPROCESS["图像预处理  _transform"]
+        P1["Resize → 224×224"]
+        P2["ToTensor\n[0,1] float32"]
+        P3["Normalize\nmean=[.485,.456,.406]\nstd=[.229,.224,.225]"]
+        P1 --> P2 --> P3
+    end
+
+    subgraph MODEL["ResNet50 推理  (GPU/CPU)"]
+        M1["unsqueeze(0)\n添加 batch 维度\n1×3×224×224"]
+        M2["ResNet50 Backbone\nlayer1→layer2→layer3→layer4\n特征图 7×7×2048"]
+        M3["AdaptiveAvgPool2d\n全局平均池化\n2048 dim"]
+        M4["FC Layer (Linear)\n2048 → 2\n[FAKE_logit, REAL_logit]"]
+        M5["Softmax\n转概率分布"]
+        M1 --> M2 --> M3 --> M4 --> M5
+    end
+
+    subgraph OUTPUT_MAIN["主输出"]
+        O1["argmax → label\n'FAKE' or 'REAL'"]
+        O2["confidence = max_prob × 100\n(0~100%)"]
+        O3["probs = [{label, label_zh, score}]\n两类的概率列表"]
+        O1 & O2 & O3
+    end
+
+    subgraph GRADCAM["Grad-CAM (可选, cam=1)"]
+        G1["注册 Forward Hook\nlayer4 → activations"]
+        G2["注册 Backward Hook\nlayer4 → gradients"]
+        G3["output[0, class_idx].backward()"]
+        G4["weights = grads.mean(dim=2,3)\n通道重要性权重"]
+        G5["CAM = (weights × acts).sum(dim=1)\nReLU 激活"]
+        G6["归一化 [0,1]\n上采样到原始尺寸"]
+        G7["RGBA 热力图叠加\nred=activation\nalpha=activation×180"]
+        G8["Base64 JPEG 编码\ndata:image/jpeg;base64,..."]
+        G1 --> G2 --> G3 --> G4 --> G5 --> G6 --> G7 --> G8
+    end
+
+    subgraph EXPLAIN["规则解释生成  explain_result()"]
+        E1{"label == FAKE?"}
+        E2["_FAKE_RULES\n按置信度分4级\n极高/高/中/低"]
+        E3["_REAL_RULES\n按置信度分4级"]
+        E4["输出:\n{level, summary,\nclues, disclaimer}"]
+        E1 -->|Yes| E2
+        E1 -->|No| E3
+        E2 & E3 --> E4
+    end
+
+    INPUT --> PREPROCESS --> MODEL
+    M5 --> OUTPUT_MAIN
+    M5 --> GRADCAM
+    OUTPUT_MAIN --> EXPLAIN
+
+    RESULT(["DetectResponse\n{label, confidence,\nprobs, explanation,\ncam_image, detection_id}"])
+    EXPLAIN --> RESULT
+    GRADCAM --> RESULT
+
+    style PREPROCESS fill:#082f49,stroke:#0369a1,color:#bae6fd
+    style MODEL fill:#431407,stroke:#c2410c,color:#fed7aa
+    style OUTPUT_MAIN fill:#14532d,stroke:#15803d,color:#bbf7d0
+    style GRADCAM fill:#3b0764,stroke:#7e22ce,color:#e9d5ff
+    style EXPLAIN fill:#422006,stroke:#b45309,color:#fde68a
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 6. 多维度分析器算法设计图 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s6">
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <h2>多维度分析器算法设计图</h2>
+    <span class="badge badge-algo">算法</span>
+  </div>
+  <p class="desc">展示 URL 检测流程中六个并行分析维度的技术细节，以及 composite.py 如何加权合并出综合可信度评分。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+graph TD
+    IMG_IN(["PIL Image × N"])
+
+    subgraph PARALLEL["六维度并行分析  (asyncio并发)"]
+        direction LR
+
+        subgraph A1["🔬 频率域分析\nfrequency_analyzer.py"]
+            FA1["灰度化\nGrayscale"]
+            FA2["2D FFT\nfftshift"]
+            FA3["径向功率谱\nPSD计算"]
+            FA4["对数空间线性拟合\n1/f^α 分布"]
+            FA5["score=f(slope, R²)\n自然照片 α≈2, R²>0.85"]
+            FA1-->FA2-->FA3-->FA4-->FA5
+        end
+
+        subgraph A2["🔍 边缘分析\nedge_analyzer.py"]
+            EA1["Canny 边缘检测\nOpenCV"]
+            EA2["Laplacian 锐度\n方差计算"]
+            EA3["边缘密度统计"]
+            EA4["AI图像边缘\n过于平滑/规整"]
+            EA1-->EA2-->EA3-->EA4
+        end
+
+        subgraph A3["👤 人脸分析\nface_analyzer.py"]
+            FA_1["MTCNN / OpenCV\n人脸检测"]
+            FA_2["面部关键点\n对称性分析"]
+            FA_3["皮肤纹理熵\nAI皮肤过光滑"]
+            FA_4["眼部细节\n虹膜/睫毛异常"]
+            FA_1-->FA_2-->FA_3-->FA_4
+        end
+
+        subgraph A4["🏷️ Logo检测\nlogo_analyzer.py"]
+            LA1["模板匹配\n媒体logo数据库"]
+            LA2["置信度评分"]
+            LA3["identified_logo\n来源可信度"]
+            LA1-->LA2-->LA3
+        end
+
+        subgraph A5["🖋️ 印章检测\nseal_detector.py"]
+            SA1["圆形检测\nHough变换"]
+            SA2["红色区域分割\nHSV色彩空间"]
+            SA3["印章真实性评分"]
+            SA1-->SA2-->SA3
+        end
+
+        subgraph A6["🔗 文图一致性\nclip_classify.py"]
+            CA1["CLIP ViT-B/32\n图像编码"]
+            CA2["文章文本\nCLIP文本编码"]
+            CA3["余弦相似度\n一致性评分"]
+            CA1-->CA2-->CA3
+        end
+    end
+
+    subgraph COMPOSITE["综合评分  composite.py"]
+        direction TB
+        W1["authenticity (ResNet50)\n× 0.25"]
+        W2["confidence (置信度)\n× 0.20"]
+        W3["consistency (CLIP)\n× 0.20"]
+        W4["seal (印章)\n× 0.15"]
+        W5["frequency (频率域)\n× 0.10"]
+        W6["edge (边缘)\n× 0.10"]
+        SUM["Σ 加权求和\noverall_score ∈ [0,100]"]
+        W1 & W2 & W3 & W4 & W5 & W6 --> SUM
+    end
+
+    subgraph VERDICT["可信度判定"]
+        V1{"overall_score"}
+        V2["≥70: 可信\n✅ 未发现明显异常"]
+        V3["40~70: 可疑\n⚠️ 建议人工核实"]
+        V4["<40: 不可信\n❌ 多项异常"]
+        V1 -->|"≥70"| V2
+        V1 -->|"40-70"| V3
+        V1 -->|"<40"| V4
+    end
+
+    IMG_IN --> PARALLEL
+    A1 --> W5
+    A2 --> W6
+    A3 --> W2
+    A4 --> W3
+    A5 --> W4
+    A6 --> W3
+    COMPOSITE --> VERDICT
+
+    style PARALLEL fill:#1c1917,stroke:#57534e,color:#e7e5e4
+    style COMPOSITE fill:#431407,stroke:#c2410c,color:#fed7aa
+    style VERDICT fill:#14532d,stroke:#15803d,color:#bbf7d0
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 7. 全局端到端数据流图 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s7">
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <h2>全局端到端数据流图</h2>
+    <span class="badge badge-flow">数据流</span>
+  </div>
+  <p class="desc">宏观视角展示三种检测模式的数据如何从用户操作出发，流经前端、API、AI推理层，最终写入数据库并返回给用户。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+flowchart LR
+    subgraph USER_INPUT["用户输入"]
+        I1["📤 上传图片文件"]
+        I2["🔗 粘贴新闻URL"]
+        I3["📁 拖拽文件/文件夹"]
+    end
+
+    subgraph FRONTEND_PROC["前端处理"]
+        F1["FormData\n构建multipart"]
+        F2["JSON body\n{url: string}"]
+        F3["XHR\n分片上传+进度"]
+        F4["WebSocket\nwss://host/ws/detect/{id}"]
+    end
+
+    subgraph CACHE_CHECK["Redis 缓存层"]
+        C1{"SHA256命中?"}
+        C2["返回缓存结果\n<10ms"]
+        C3["继续推理"]
+        C1 -->|命中| C2
+        C1 -->|未命中| C3
+    end
+
+    subgraph INFERENCE["AI 推理"]
+        AI1["ResNet50 前向传播\n~50ms/img CPU\n~5ms/img GPU"]
+        AI2["Grad-CAM\n反向传播热力图"]
+        AI3["6维度分析器\n并发执行"]
+        AI4["CLIP 文图一致性"]
+        AI5["XAI: LIME/SHAP\n文本检测专用"]
+    end
+
+    subgraph PERSIST["持久化"]
+        DB1["SQLite\ndetection_records"]
+        DB2["SQLite\ntext_detection_records"]
+        CACHE_W["Redis 写入\nTTL=3600s"]
+    end
+
+    subgraph RESPONSE["响应数据"]
+        R1["DetectResponse\nJSON"]
+        R2["DetectUrlResponse\nJSON"]
+        R3["WS Event Stream\nstart→item→result→complete"]
+    end
+
+    I1 --> F1 --> CACHE_CHECK
+    I2 --> F2 -->|"async_fetch_page_content\n解析DOM/img标签"| AI3 & AI4
+    I3 --> F3 & F4
+
+    C3 --> AI1
+    AI1 --> AI2
+    AI3 --> AI4
+
+    AI1 --> DB1 & CACHE_W
+    AI1 --> R1
+    AI3 & AI4 --> R2
+    F4 -->|"WS消息推送"| R3
+
+    R1 & R2 --> FRONTEND_PROC
+    R3 --> F4
+
+    style USER_INPUT fill:#1e1b4b,stroke:#4c1d95,color:#c4b5fd
+    style FRONTEND_PROC fill:#082f49,stroke:#0369a1,color:#bae6fd
+    style CACHE_CHECK fill:#134e4a,stroke:#0f766e,color:#99f6e4
+    style INFERENCE fill:#431407,stroke:#c2410c,color:#fed7aa
+    style PERSIST fill:#14532d,stroke:#15803d,color:#bbf7d0
+    style RESPONSE fill:#422006,stroke:#b45309,color:#fde68a
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 8. 单图检测完整数据流 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s8">
+  <div class="section-header">
+    <div class="section-num">8</div>
+    <h2>单图检测完整数据流（时序）</h2>
+    <span class="badge badge-flow">数据流</span>
+  </div>
+  <p class="desc">以时序图视角展示单图检测全链路：从用户拖拽图片到前端渲染 Grad-CAM 热力图，包含缓存查询、异步推理、数据库写入的完整时序。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+sequenceDiagram
+    actor 用户
+    participant FE as 前端 app.js
+    participant API as FastAPI /api/detect
+    participant CACHE as Redis 缓存
+    participant MODEL as ResNet50 推理
+    participant DB as SQLite DB
+
+    用户->>FE: 拖拽/选择图片文件
+    FE->>FE: FileReader.readAsDataURL()\n预览图片
+
+    用户->>FE: 点击"检测"按钮
+    FE->>FE: 构建 FormData\n附加 cam=1 参数（可选）
+    FE->>API: POST /api/detect\nContent-Type: multipart/form-data
+
+    API->>API: 读取 UploadFile.read()\n校验文件非空
+
+    alt 不带 cam 参数
+        API->>CACHE: get_cached_result(SHA256)
+        alt 缓存命中
+            CACHE-->>API: 返回 cached JSON
+            API-->>FE: 200 DetectResponse (cache hit)
+        end
+    end
+
+    API->>API: PIL.Image.open(BytesIO)
+    API->>MODEL: run_in_executor(detect_image, img, with_cam)
+    Note over MODEL: 线程池中同步执行\n避免阻塞事件循环
+
+    MODEL->>MODEL: _transform(img)\nResize+Normalize
+    MODEL->>MODEL: model(tensor) 前向传播
+    MODEL->>MODEL: softmax → label + confidence
+    opt cam=1
+        MODEL->>MODEL: _grad_cam() 反向传播
+        MODEL->>MODEL: grad_cam_overlay() 热力图叠加
+        MODEL-->>API: {label, probs, cam_image:base64}
+    end
+    MODEL-->>API: {label, confidence, probs, explanation}
+
+    API->>CACHE: set_cached_result(SHA256, data, TTL=3600)
+    API->>DB: INSERT detection_records\n(user_id, hash, label, confidence)
+    DB-->>API: record.id (detection_id)
+
+    API-->>FE: 200 JSON DetectResponse
+
+    FE->>FE: renderResult(data)
+    FE->>FE: 显示 FAKE/REAL 标签\n+ 置信度进度条
+    opt cam_image 存在
+        FE->>FE: &lt;img src=cam_image&gt;\n叠加 Grad-CAM 热力图
+    end
+    FE->>FE: 渲染文字解释\n{level, summary, clues}
+    FE-->>用户: 展示完整检测结果
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 9. URL批量检测数据流 + 批量文件检测 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s9">
+  <div class="section-header">
+    <div class="section-num">9</div>
+    <h2>批量文件检测 WebSocket 数据流</h2>
+    <span class="badge badge-flow">数据流</span>
+  </div>
+  <p class="desc">展示批量检测（文件/文件夹拖拽）的完整 WebSocket 通信流程，包含 Job 初始化、WS 握手、分批推理进度推送、前端实时渲染卡片。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+sequenceDiagram
+    actor 用户
+    participant FE as 前端 app.js
+    participant HTTP as POST /api/detect-batch-init
+    participant WS as WS /ws/detect/{job_id}
+    participant WORKER as 批量推理 Worker
+    participant DB as SQLite
+
+    用户->>FE: 拖拽文件夹或选择多文件
+    FE->>FE: 过滤 _ACCEPTED_RE\n(jpg/png/pdf/docx/html/txt)
+    FE->>FE: 检查 role ∈ {auditor, admin}
+
+    FE->>HTTP: POST /api/detect-batch-init\n{file_count: N}\nAuthorization: Bearer JWT
+
+    HTTP->>HTTP: require_role('auditor')
+    HTTP->>HTTP: create_job(user_id)\n生成 UUID job_id\n创建 asyncio.Queue
+
+    HTTP-->>FE: {job_id: "uuid-xxxx"}
+
+    FE->>WS: WebSocket 连接\nwss://host/ws/detect/{job_id}?token=JWT
+
+    WS->>WS: decode_token(token)\n校验 role
+    WS->>WS: get_job(job_id)\n验证 user_id 匹配
+    WS-->>FE: 101 Switching Protocols
+
+    FE->>HTTP: XHR POST /api/detect-batch\nFormData (files[])\nX-Job-Id: uuid-xxxx
+
+    Note over HTTP,WORKER: 后端异步处理批量文件
+
+    HTTP->>WORKER: BackgroundTask\nprocess_batch_job(job_id, files)
+
+    WORKER->>WS: queue.put({type:"start", total:N})
+    WS->>FE: WS message: {type:"start", total:N}
+    FE->>FE: 显示 batch-bar\n初始化进度条
+
+    loop 每个文件
+        WORKER->>WORKER: 提取图片\nextract_images_from_file()
+        WORKER->>WS: queue.put({type:"item", index:i, name:"x.jpg"})
+        WS->>FE: WS message: {type:"item"}
+        FE->>FE: 渲染 skeleton-card\n占位符
+
+        WORKER->>WORKER: detect_image(img)
+        WORKER->>DB: INSERT detection_records
+
+        WORKER->>WS: queue.put({type:"result", index:i, data:{...}})
+        WS->>FE: WS message: {type:"result", data:{label, confidence, cam_image}}
+        FE->>FE: 替换 skeleton → 真实卡片\n更新 detectProgressBar
+    end
+
+    WORKER->>WS: queue.put({type:"complete", stats:{...}})
+    WS->>FE: WS message: {type:"complete"}
+    FE->>FE: 进度条变绿\n显示统计摘要
+    WS->>WS: 关闭连接
+    FE-->>用户: 批量检测完成\n所有卡片已渲染
+    </div>
+  </div>
+</section>
+
+<hr />
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- 10. 数据库模型与认证权限设计 -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="s10">
+  <div class="section-header">
+    <div class="section-num">10</div>
+    <h2>数据库模型与认证权限设计</h2>
+    <span class="badge badge-db">数据库</span>
+  </div>
+  <p class="desc">展示 SQLAlchemy ORM 模型关系图，以及 JWT 双令牌认证机制（access token + refresh token）与三级角色权限控制体系。</p>
+  <div class="diagram-wrap">
+    <div class="mermaid">
+erDiagram
+    users {
+        int id PK
+        string username UK
+        string password_hash "bcrypt"
+        string role "user/auditor/admin"
+        datetime created_at
+    }
+
+    detection_records {
+        int id PK
+        int user_id FK
+        string image_hash "SHA-256 64chars"
+        text image_url "nullable"
+        string label "FAKE/REAL"
+        float confidence
+        text probs_json "JSON数组"
+        string model_version "hash前8位"
+        datetime created_at
+    }
+
+    text_detection_records {
+        int id PK
+        int user_id FK
+        string text_hash "SHA-256 64chars"
+        text text_content
+        string label "FAKE/REAL"
+        float confidence
+        text probs_json
+        text lime_json "nullable"
+        text shap_json "nullable"
+        string xai_method "lime/shap"
+        text highlighted_html "nullable"
+        string model_version
+        datetime created_at
+    }
+
+    feedback_records {
+        int id PK
+        int detection_id FK
+        int user_id FK
+        string feedback_type "correct/incorrect"
+        text comment "nullable"
+        datetime created_at
+    }
+
+    users ||--o{ detection_records : "user_id"
+    users ||--o{ text_detection_records : "user_id"
+    users ||--o{ feedback_records : "user_id"
+    detection_records ||--o{ feedback_records : "detection_id"
+    </div>
+  </div>
+
+  <br />
+
+  <div class="diagram-wrap">
+    <div class="mermaid">
+flowchart TD
+    subgraph JWT_FLOW["JWT 双令牌认证流程"]
+        REG["POST /api/auth/register\n用户名 + 密码"]
+        LOGIN["POST /api/auth/login\n验证 bcrypt 哈希"]
+        TOKENS["返回:\naccess_token (15min)\nrefresh_token (7day)"]
+        REG --> LOGIN --> TOKENS
+
+        STORE["前端存储\nlocalStorage\naccess + refresh"]
+        TOKENS --> STORE
+
+        API_CALL["API 请求\nAuthorization: Bearer {access}"]
+        DECODE["decode_token()\nJWT decode → payload\n{sub, role, exp, type}"]
+        EXPIRE{"access 过期?"}
+        REFRESH["POST /api/auth/refresh\n{refresh_token}"]
+        NEW_ACCESS["新 access_token"]
+        REJECT["401 Unauthorized\n前端清除登录态"]
+
+        STORE --> API_CALL --> DECODE --> EXPIRE
+        EXPIRE -->|否| AUTHED["鉴权通过\n注入 current_user"]
+        EXPIRE -->|是| REFRESH --> NEW_ACCESS --> STORE
+        REFRESH -->|refresh也过期| REJECT
+    end
+
+    subgraph RBAC["三级角色权限控制  RBAC"]
+        ROLE_USER["🟢 user\n普通用户"]
+        ROLE_AUD["🟡 auditor\n审核员"]
+        ROLE_ADM["🔴 admin\n管理员"]
+
+        P1["✅ 单图检测\nPOST /api/detect"]
+        P2["✅ URL检测\nPOST /api/detect-url"]
+        P3["✅ 查看历史\nGET /api/history"]
+        P4["✅ 批量检测\nPOST /api/detect-batch"]
+        P5["✅ 导出报告\nGET /api/report/*/export"]
+        P6["✅ 用户管理\nGET/PATCH /api/admin/*"]
+        P7["✅ 角色修改\nPATCH /api/auth/admin/users/*/role"]
+
+        ROLE_USER --> P1 & P2 & P3
+        ROLE_AUD --> P1 & P2 & P3 & P4 & P5
+        ROLE_ADM --> P1 & P2 & P3 & P4 & P5 & P6 & P7
+    end
+
+    style JWT_FLOW fill:#082f49,stroke:#0369a1,color:#bae6fd
+    style RBAC fill:#14532d,stroke:#15803d,color:#bbf7d0
+    </div>
+  </div>
+</section>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#312e81',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#4f46e5',
+      lineColor: '#6366f1',
+      secondaryColor: '#1e293b',
+      tertiaryColor: '#0f172a',
+      background: '#1a1d2e',
+      mainBkg: '#1a1d2e',
+      nodeBorder: '#4f46e5',
+      clusterBkg: '#0f1117',
+      titleColor: '#818cf8',
+      edgeLabelBackground: '#1e293b',
+      fontSize: '14px'
+    },
+    flowchart: { curve: 'basis', htmlLabels: true },
+    sequence: { actorMargin: 60, messageMargin: 30 }
+  });
+</script>
+</body>
+</html>

@@ -1,4 +1,11 @@
 # Minimal dependencies for running the AIGI-Holmes detection app (server.py)
+#
+# ── 核心科学计算栈：版本锁定以避免跨包冲突 ──────────────────────────────
+# mediapipe 0.10.x（通过 rtl>=0.11.4）要求 numpy<2
+# opencv-python-headless 4.10+ 要求 numpy>=2，故锁定到 4.9.x
+# torch 2.x / scipy 1.x / transformers 4.x 均兼容 numpy 1.26.x
+numpy>=1.24,<2
+
 flask>=3.0
 torch>=2.0
 torchvision>=0.15
@@ -13,7 +20,9 @@ fastapi>=0.110
 uvicorn[standard]>=0.27
 httpx>=0.27
 pydantic-settings>=2.0
+python-dotenv>=1.0
 sqlalchemy[asyncio]>=2.0
+aiosqlite>=0.19
 asyncpg>=0.29
 redis>=5.0
 python-jose[cryptography]>=3.3
@@ -22,3 +31,33 @@ bcrypt==4.0.1
 jinja2>=3.1
 reportlab>=4.0
 openpyxl>=3.1
+
+# Text-file image extraction
+PyMuPDF>=1.23
+python-docx>=1.1
+
+# File upload support (required for FastAPI UploadFile)
+python-multipart>=0.0.9
+
+# CLIP content classification (zero-shot)
+ftfy>=6.0
+regex>=2023.0
+-e ./CLIP
+
+# Multi-dimension image analyzers (seal, frequency, edge, face, exif)
+# opencv-python-headless <4.10 兼容 numpy<2（mediapipe 的约束）
+opencv-python-headless>=4.8,<4.10
+scipy>=1.10
+# mediapipe 0.10.x 通过 rtl 要求 numpy<2，与上面的 numpy 锁定匹配
+mediapipe>=0.10,<0.11
+
+# Security — rate limiting & language detection
+slowapi>=0.1.9
+langdetect>=1.0.9
+
+# XAI — explainable AI (LIME + SHAP)
+lime>=0.2.0
+shap>=0.41.0
+transformers>=4.33
+scikit-learn>=1.0
+sentencepiece>=0.1.99

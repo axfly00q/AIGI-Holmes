@@ -141,6 +141,7 @@ my_model/
 
 # Pytorch
 *.pth
+!finetuned_fake_real_resnet50.pth
 *.pt
 
 # ast template
@@ -158,10 +159,8 @@ CONTRIBUTING.md
 CONTRIBUTING_CN.md
 Chameleon.zip
 Chameleon/
-LICENSE
 MANIFEST.in
 Makefile
-README.md
 README_CN.md
 Replication-for-Characterizing-Photorealism-2025/
 Untitled.ipynb
@@ -172,6 +171,11 @@ Untitled3-Copy2.ipynb
 Untitled3-Copy3.ipynb
 Untitled3.ipynb
 __MACOSX/
+# Training data directories (large files, not needed for distribution)
+data/
+data 1/
+data*/
+
 ablation_checkpoints/
 ablation_data/
 autogressive_data.zip

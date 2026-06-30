@@ -1,1 +1,6 @@
+# App (FastAPI backend + detection engine)
+-r requirements-app.txt
+
+# ML training framework
 -r requirements/framework.txt
+-r requirements/llm.txt

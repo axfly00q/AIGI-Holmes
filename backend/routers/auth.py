@@ -16,9 +16,10 @@ from backend.auth import (
     decode_token,
     hash_password,
 )
+from backend.config import get_settings
 from backend.database import get_db
-from backend.dependencies import get_current_user
-from backend.exceptions import AuthError
+from backend.dependencies import get_current_user, require_role
+from backend.exceptions import AuthError, ForbiddenError
 from backend.models.user import User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -102,6 +103,7 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 class ChangeRoleRequest(BaseModel):
     role: Literal["user", "auditor", "admin"]
+    admin_password: str = Field(..., min_length=1, max_length=128)
 
 
 @router.patch("/admin/users/{username}/role")
@@ -111,6 +113,9 @@ async def change_user_role(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if body.admin_password != get_settings().ADMIN_ROLE_PASSWORD:
+        raise ForbiddenError("管理密码错误。")
+
     result = await db.execute(select(User).where(User.username == username))
     target = result.scalar_one_or_none()
     if target is None:
