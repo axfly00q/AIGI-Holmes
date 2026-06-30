@@ -10,7 +10,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](#方式一docker-部署推荐)
 [![License](https://img.shields.io/badge/License-MIT-brightgreen)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%2010%2B-0078D6)](https://github.com/axfly00q/AIGI-Holmes)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows%2010%2B-0078D6)](https://github.com/axfly00q/AIGI-Holmes)
 [![GitHub Stars](https://img.shields.io/github/stars/axfly00q/AIGI-Holmes?style=social)](https://github.com/axfly00q/AIGI-Holmes/stargazers)
 
 <br/>
@@ -114,13 +114,13 @@ cd AIGI-Holmes
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env：填入 DOUBAO_API_KEY、JWT_SECRET 等
+# 编辑 .env：按需填入 SECRET_KEY、DOUBAO_API_KEY、SERPER_API_KEY 等
 
 # 3. 启动全栈服务（含 PostgreSQL + Redis）
 docker compose up -d
 
 # 4. 查看日志 / 健康状态
-docker compose logs -f aigi-holmes
+docker compose logs -f app
 
 # 访问：http://localhost:7860
 ```
@@ -153,15 +153,20 @@ cd AIGI-Holmes
 
 # 2. 创建虚拟环境（推荐 Python 3.10）
 python -m venv venv
-venv\Scripts\activate         # Windows
-# source venv/bin/activate    # Linux/macOS
+
+# macOS / Linux
+source venv/bin/activate
+
+# Windows PowerShell
+# .\venv\Scripts\Activate.ps1
 
 # 3. 安装依赖
 pip install -r requirements-app.txt
 
 # 4. 配置环境变量
-copy .env.example .env
-# 按需编辑 .env（默认 SQLite，开箱即用）
+cp .env.example .env          # macOS / Linux
+# copy .env.example .env      # Windows
+# 按需编辑 .env（默认 SQLite；DOUBAO_API_KEY / SERPER_API_KEY 可留空）
 
 # 5. 启动服务
 uvicorn backend.main:app --host 127.0.0.1 --port 7860 --reload

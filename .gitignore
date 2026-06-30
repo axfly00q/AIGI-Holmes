@@ -141,6 +141,7 @@ my_model/
 
 # Pytorch
 *.pth
+!finetuned_fake_real_resnet50.pth
 *.pt
 
 # ast template
@@ -158,7 +159,6 @@ CONTRIBUTING.md
 CONTRIBUTING_CN.md
 Chameleon.zip
 Chameleon/
-LICENSE
 MANIFEST.in
 Makefile
 README_CN.md

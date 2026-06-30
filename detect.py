@@ -36,8 +36,25 @@ else:
 # Model
 # ---------------------------------------------------------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.path.join(BASE_DIR, "finetuned_fake_real_resnet50.pth")
 CLASSES = ["FAKE", "REAL"]
+
+
+def _resolve_model_path() -> str:
+    """Resolve MODEL_PATH from .env/environment, falling back to the repo root."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(os.path.join(BASE_DIR, ".env"), override=False)
+    except Exception:
+        pass
+
+    configured = os.environ.get("MODEL_PATH", "").strip()
+    if configured:
+        return configured if os.path.isabs(configured) else os.path.join(BASE_DIR, configured)
+    return os.path.join(BASE_DIR, "finetuned_fake_real_resnet50.pth")
+
+
+MODEL_PATH = _resolve_model_path()
 
 
 def _load_model():
