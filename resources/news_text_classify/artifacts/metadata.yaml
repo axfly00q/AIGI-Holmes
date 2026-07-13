@@ -1,0 +1,74 @@
+model_version: news-text-v1
+default_model: nb
+label_order:
+- 财经
+- 体育
+- 科技
+- 娱乐
+- 社会
+- 教育
+- 军事
+- 汽车
+training_summary:
+  source: NLPCC2017+HF-THUCNews-cnews
+  total_samples: 20000
+  class_counts:
+    财经: 2500
+    体育: 2500
+    科技: 2500
+    娱乐: 2500
+    社会: 2500
+    教育: 2500
+    军事: 2500
+    汽车: 2500
+  source_counts:
+    NLPCC2017: 17500
+    HF-THUCNews-cnews: 2500
+  cleaning_stats:
+    before: 90400
+    after: 90400
+    dropped_empty: 0
+    dropped_short: 0
+    dropped_duplicate: 0
+  max_per_class: 2500
+  target_macro_f1: 0.8125
+  best_model: nb
+  best_macro_f1: 0.8053
+  selected_input_strategy: title_plus_summary
+  input_strategy_metrics:
+  - strategy: title_plus_summary
+    accuracy: 0.7777
+    macro_f1: 0.7786
+  - strategy: title_only
+    accuracy: 0.7673
+    macro_f1: 0.7678
+  - strategy: title_weighted_content
+    accuracy: 0.7607
+    macro_f1: 0.7613
+  status: below_target
+  formal: true
+  warnings:
+  - 'hybrid source: NLPCC2017 provides covered labels; HF-THUCNews/cnews supplements
+    教育'
+  - '教育: NLPCC=0, HF-THUCNews=6496'
+  - 'NLPCC: 缺少类别: 教育'
+  - 'HF-THUCNews: 缺少类别: 军事, 汽车'
+  trained_at: '2026-07-11 11:04:00'
+  note: formal training artifact generated from public news classification data.
+models:
+  nb:
+    name: 朴素贝叶斯
+    accuracy: 0.805
+    macro_f1: 0.8053
+  lr:
+    name: 逻辑回归
+    accuracy: 0.7883
+    macro_f1: 0.7889
+  svm:
+    name: 线性 SVM
+    accuracy: 0.7707
+    macro_f1: 0.7698
+  textcnn:
+    name: TextCNN
+    accuracy: 0.8043
+    macro_f1: 0.8024

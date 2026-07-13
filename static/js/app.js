@@ -327,7 +327,7 @@ async function downloadReport(id, fmt) {
   URL.revokeObjectURL(a.href);
 }
 
-const _tabTitles = { upload: '上传图片', url: '新闻检测', batch: '批量检测', history: '检测历史', text: '文本检测' };
+const _tabTitles = { upload: '上传图片', url: '新闻检测', batch: '批量检测', history: '检测历史', 'news-classify': '新闻文本分类', text: '文本检测' };
 
 function switchToTab(tabName) {
   // Close modals if open
@@ -344,6 +344,10 @@ function switchToTab(tabName) {
   const _utc = $('urlTopbarControls');
   if (_utc) _utc.hidden = (tabName !== 'url');
   // 切换页时隐藏顶部检测结果（防止确认提示遗留）
+  if (tabName === 'news-classify') {
+    loadNewsClassifyModels();
+    loadNewsClassifySamples();
+  }
   if (tabName === 'history') {
     const raw = localStorage.getItem(AUTH_USER_KEY);
     if (!raw) {
@@ -354,6 +358,7 @@ function switchToTab(tabName) {
     if (activeHistSub) {
       const subTab = activeHistSub.dataset.historyTab;
       if (subTab === 'my-records') loadMyRecords(1);
+      else if (subTab === 'news-classify-records') loadNewsClassifyHistory(1);
       else if (subTab === 'admin-panel') {
         const activeAdminSub = document.querySelector('.admin-sub-tab-btn.active');
         const adminTab = activeAdminSub ? activeAdminSub.dataset.adminTab : 'dashboard';
@@ -589,6 +594,7 @@ const reportBody = $('reportBody');
 let _urlRadarChart = null;
 let _urlArticleText = '';
 let _urlTextResult = null;
+let _urlNewsClassifyResult = null;
 let _urlPageTitle = '';
 let _urlPageSummary = '';
 let lastDetectionId = null;   // detection_id of the last single-image result
@@ -753,6 +759,61 @@ function _updateReportWithTextResult(result) {
   if (existing) { existing.outerHTML = html; } else { dimEl.insertAdjacentHTML('beforeend', html); }
 }
 
+async function classifyUrlNewsText() {
+  const title = (_urlPageTitle || '').trim();
+  const content = (_urlArticleText || _urlPageSummary || '').trim();
+  if (!title && !content) {
+    showToast('当前页面没有可分类的新闻文本');
+    return;
+  }
+  const btn = $('btnClassifyUrlNews');
+  if (btn) { btn.disabled = true; btn.innerHTML = spinnerHTML() + '分类中…'; }
+  try {
+    const res = await fetch('/api/text-classify/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ title: title || content.slice(0, 80), content, model_key: 'best' }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    _urlNewsClassifyResult = data;
+    const wrap = $('urlNewsClassifyResult');
+    if (wrap) {
+      wrap.innerHTML = renderNewsClassifyResultCard(data, '新闻文本分类');
+      wrap.hidden = false;
+    }
+  } catch (err) {
+    showToast('新闻分类失败：' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '新闻文本分类'; }
+  }
+}
+
+function renderNewsClassifyResultCard(result, titleText = '分类结果') {
+  const probs = (result.probabilities || []).slice(0, 8);
+  const keywords = (result.keywords || []).slice(0, 10);
+  const probHtml = probs.map(p => {
+    const pct = Math.round((p.score || 0) * 100);
+    return `<div class="news-prob-row"><span>${_escHtml(p.label)}</span><div class="news-prob-track"><div class="news-prob-fill" style="width:${pct}%"></div></div><span>${pct}%</span></div>`;
+  }).join('');
+  const kwHtml = keywords.map(k => `<span class="news-keyword-tag">${_escHtml(k.word)}</span>`).join('') || '<span class="news-keyword-tag">暂无关键词</span>';
+  return `
+    <div class="news-classify-card-head">
+      <h3>${_escHtml(titleText)}</h3>
+      <span>${_escHtml(result.model_name || result.model_key || '')}</span>
+    </div>
+    <div class="news-classify-result-main">
+      <div class="news-classify-badge">${_escHtml(result.category || '--')}</div>
+      <div class="news-classify-summary">
+        <strong>${_escHtml(result.category || '未知类别')}</strong>
+        <span>置信度 ${(result.confidence || 0).toFixed(1)}% · 模型版本 ${_escHtml(result.model_version || '--')}</span>
+      </div>
+    </div>
+    <div class="news-prob-list">${probHtml}</div>
+    <div class="news-keywords">${kwHtml}</div>
+  `;
+}
+
 function renderUrlAnalysis(d) {
   // Show summary panel
   if (d.page_title || d.page_summary) {
@@ -778,13 +839,18 @@ function renderUrlAnalysis(d) {
   _urlPageTitle = d.page_title || '';
   _urlPageSummary = d.page_summary || '';
   _urlTextResult = null;
+  _urlNewsClassifyResult = null;
   const _textWrap = $('urlTextDetectWrap');
   if (_textWrap) {
     _textWrap.hidden = !_urlArticleText;
     const _tr = $('urlTextDetectResult');
     if (_tr) { _tr.hidden = true; _tr.innerHTML = ''; }
+    const _cr = $('urlNewsClassifyResult');
+    if (_cr) { _cr.hidden = true; _cr.innerHTML = ''; }
     const _tbtn = $('btnDetectUrlText');
     if (_tbtn) { _tbtn.disabled = false; _tbtn.textContent = '\u68c0\u6d4b\u6587\u7ae0\u6587\u672c'; }
+    const _cbtn = $('btnClassifyUrlNews');
+    if (_cbtn) { _cbtn.disabled = false; _cbtn.textContent = '新闻文本分类'; }
   }
 
   // Show analysis layout
@@ -1009,6 +1075,8 @@ $('btnUrlScrollTop').addEventListener('click', () => {
 
 // 文章文本检测按鈕
 $('btnDetectUrlText').addEventListener('click', detectUrlText);
+const _btnClassifyUrlNews = $('btnClassifyUrlNews');
+if (_btnClassifyUrlNews) _btnClassifyUrlNews.addEventListener('click', classifyUrlNewsText);
 
 // Translation button for news summary
 document.addEventListener('click', (e) => {
@@ -1677,6 +1745,7 @@ function switchHistoryTab(tabName) {
   const pane = $('history-' + tabName);
   if (pane) pane.classList.add('active');
   if (tabName === 'my-records') loadMyRecords(1);
+  if (tabName === 'news-classify-records') loadNewsClassifyHistory(1);
   if (tabName === 'admin-panel') {
     // Load the currently active admin sub-tab
     const activeSubBtn = document.querySelector('.admin-sub-tab-btn.active');
@@ -2673,11 +2742,56 @@ async function loadMyRecords(page) {
   }
 }
 
+async function loadNewsClassifyHistory(page) {
+  const searchEl = $('newsClassifyHistorySearch');
+  const catEl = $('newsClassifyHistoryCategory');
+  const params = new URLSearchParams({ page, page_size: 10 });
+  const search = (searchEl && searchEl.value.trim()) || '';
+  const category = (catEl && catEl.value) || '';
+  if (search) params.set('search', search);
+  if (category) params.set('category', category);
+  try {
+    const res = await fetch(`/api/text-classify/history?${params}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const totalEl = $('newsClassifyHistoryTotal');
+    if (totalEl) totalEl.textContent = `共 ${data.total} 条`;
+    const wrap = $('newsClassifyHistoryTable');
+    if (!wrap) return;
+    if (!data.records || data.records.length === 0) {
+      wrap.innerHTML = '<p style="color:#94a3b8;padding:24px;text-align:center">暂无新闻分类记录</p>';
+    } else {
+      wrap.innerHTML = `
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>标题</th><th>类别</th><th>置信度</th><th>模型</th><th>时间</th></tr></thead>
+          <tbody>${data.records.map(r => `<tr>
+            <td>${r.id}</td>
+            <td title="${_escHtml(r.title || '')}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(r.title || '')}</td>
+            <td><span class="admin-badge admin-badge--trained">${_escHtml(r.category || '--')}</span></td>
+            <td>${Math.round(r.confidence || 0)}%</td>
+            <td>${_escHtml(r.model_key || '--')}</td>
+            <td>${r.created_at ? new Date(r.created_at).toLocaleString() : '--'}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+    }
+    _renderPagination($('newsClassifyHistoryPagination'), page, data.total, 10, 'loadNewsClassifyHistory');
+  } catch (e) {
+    if (e.message && (e.message.includes('401') || e.message.includes('403'))) { clearAuth(); return; }
+    const w = $('newsClassifyHistoryTable');
+    if (w) w.innerHTML = '<p style="color:#ef4444;padding:16px">加载失败</p>';
+  }
+}
+
 // Debounced search/filter for my records
 ['myRecordsSearch', 'myRecordsLabelFilter'].forEach(id => {
   const el = $(id);
   if (!el) return;
   el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(() => loadMyRecords(1), 350); });
+});
+['newsClassifyHistorySearch', 'newsClassifyHistoryCategory'].forEach(id => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener('input', () => { clearTimeout(el._t); el._t = setTimeout(() => loadNewsClassifyHistory(1), 350); });
 });
 
 /* ============================================================
@@ -3253,6 +3367,349 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 200);
   }, 3000);
 }
+
+/* ============================================================
+   新闻文本分类
+   ============================================================ */
+let _newsClassifyModelsLoaded = false;
+let _newsClassifyExperimentsLoaded = false;
+let _newsClassifySamplesLoaded = false;
+let _newsClassifySamples = [];
+let _newsClassifyBatchRows = [];
+
+function _parseCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; continue; }
+    if (ch === '"') { quoted = !quoted; continue; }
+    if (ch === ',' && !quoted) { out.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+function _parseCsv(text) {
+  const lines = (text || '').split(/\r?\n/).filter(Boolean);
+  if (lines.length === 0) return [];
+  const headers = _parseCsvLine(lines[0]).map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const cells = _parseCsvLine(line);
+    const row = {};
+    headers.forEach((h, i) => row[h] = cells[i] || '');
+    return row;
+  });
+}
+
+function loadNewsClassifyModels() {
+  if (_newsClassifyModelsLoaded) return;
+  fetch('/api/text-classify/models')
+    .then(r => r.json())
+    .then(data => {
+      _newsClassifyModelsLoaded = true;
+      const select = $('newsClassifyModel');
+      if (select) {
+        select.innerHTML = (data.models || []).map(m => {
+          const disabled = m.available ? '' : 'disabled';
+          const selected = m.key === data.default_model ? 'selected' : '';
+          return `<option value="${_escHtml(m.key)}" ${selected} ${disabled}>${_escHtml(m.name)}${m.available ? '' : '（未训练）'}</option>`;
+        }).join('');
+      }
+      const versionEl = $('newsClassifyModelVersion');
+      if (versionEl) versionEl.textContent = data.model_version || '';
+      renderNewsClassifyMetrics(data.models || []);
+      loadNewsClassifyExperiments();
+    })
+    .catch(err => {
+      const wrap = $('newsClassifyMetrics');
+      if (wrap) wrap.innerHTML = `<p style="color:#ef4444;padding:12px">模型信息加载失败：${_escHtml(err.message)}</p>`;
+    });
+}
+
+function renderNewsClassifyMetrics(models) {
+  const wrap = $('newsClassifyMetrics');
+  if (!wrap) return;
+  if (!models.length) {
+    wrap.innerHTML = '<p style="color:#94a3b8;padding:12px">暂无模型指标</p>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="admin-table">
+      <thead><tr><th>模型</th><th>Accuracy</th><th>Macro F1</th><th>状态</th></tr></thead>
+      <tbody>${models.map(m => {
+        const f1 = typeof m.macro_f1 === 'number' ? m.macro_f1 : 0;
+        const cls = f1 >= 0.8 ? 'news-classify-metric-good' : 'news-classify-metric-warn';
+        return `<tr>
+          <td>${_escHtml(m.name || m.key)}</td>
+          <td>${typeof m.accuracy === 'number' ? (m.accuracy * 100).toFixed(1) + '%' : '--'}</td>
+          <td class="${cls}">${typeof m.macro_f1 === 'number' ? f1.toFixed(4) : '--'}</td>
+          <td>${m.available ? '可用' : '未训练'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+function _pct(value, digits = 1) {
+  return typeof value === 'number' ? (value * 100).toFixed(digits) + '%' : '--';
+}
+
+function loadNewsClassifyExperiments() {
+  if (_newsClassifyExperimentsLoaded) return;
+  fetch('/api/text-classify/experiments')
+    .then(r => r.json())
+    .then(data => {
+      _newsClassifyExperimentsLoaded = true;
+      renderNewsClassifyExperiments(data || {});
+    })
+    .catch(err => {
+      const status = $('newsClassifyExperimentStatus');
+      if (status) status.textContent = '加载失败';
+      const wrap = $('newsClassifyExperimentPanel');
+      if (wrap) wrap.innerHTML = `<p class="news-experiment-empty">实验指标加载失败：${_escHtml(err.message)}</p>`;
+    });
+}
+
+function renderNewsClassifyExperiments(data) {
+  const wrap = $('newsClassifyExperimentPanel');
+  if (!wrap) return;
+  const status = $('newsClassifyExperimentStatus');
+  const summary = data.training_summary || {};
+  const models = data.models || [];
+  const labels = data.label_order || [];
+  const perClass = data.per_class || [];
+  const matrix = data.confusion_matrix || [];
+  const classCounts = summary.class_counts || {};
+  const cleaning = summary.cleaning_stats || {};
+  const history = data.training_history || [];
+  const strategyRows = summary.input_strategy_metrics || data.input_strategy_metrics || [];
+  if (status) status.textContent = summary.best_macro_f1 ? `最佳 F1 ${Number(summary.best_macro_f1).toFixed(4)}` : '暂无指标';
+
+  const maxF1 = Math.max(...models.map(m => Number(m.macro_f1 || 0)), 1);
+  const modelBars = models.map(m => {
+    const f1 = Number(m.macro_f1 || 0);
+    return `<div class="news-exp-bar-row">
+      <span>${_escHtml(m.name || m.key || '')}</span>
+      <div class="news-exp-bar-track"><i style="width:${Math.max(4, f1 / maxF1 * 100).toFixed(1)}%"></i></div>
+      <b>${f1 ? f1.toFixed(4) : '--'}</b>
+    </div>`;
+  }).join('');
+
+  const maxCount = Math.max(...Object.values(classCounts).map(v => Number(v || 0)), 1);
+  const countBars = labels.map(label => {
+    const count = Number(classCounts[label] || 0);
+    return `<div class="news-exp-bar-row">
+      <span>${_escHtml(label)}</span>
+      <div class="news-exp-bar-track muted"><i style="width:${Math.max(3, count / maxCount * 100).toFixed(1)}%"></i></div>
+      <b>${count}</b>
+    </div>`;
+  }).join('');
+
+  const weak = (data.weak_classes || []).map(item =>
+    `<span class="news-exp-chip warn">${_escHtml(item.label)} F1 ${Number(item.f1 || 0).toFixed(4)}</span>`
+  ).join('');
+  const confusions = (data.top_confusions || []).map(item =>
+    `<span class="news-exp-chip">${_escHtml(item.actual)}→${_escHtml(item.predicted)} ${item.count}</span>`
+  ).join('');
+
+  const classRows = perClass.map(item => `<tr>
+    <td>${_escHtml(item.label)}</td>
+    <td>${Number(item.precision || 0).toFixed(4)}</td>
+    <td>${Number(item.recall || 0).toFixed(4)}</td>
+    <td class="${Number(item.f1 || 0) >= 0.8 ? 'news-classify-metric-good' : 'news-classify-metric-warn'}">${Number(item.f1 || 0).toFixed(4)}</td>
+    <td>${item.support || 0}</td>
+  </tr>`).join('');
+
+  const maxMatrix = Math.max(...matrix.flat().map(v => Number(v || 0)), 1);
+  const matrixTable = matrix.length ? `<div class="news-confusion-wrap"><table class="news-confusion-table">
+    <thead><tr><th>真实\\预测</th>${labels.map(label => `<th>${_escHtml(label)}</th>`).join('')}</tr></thead>
+    <tbody>${matrix.map((row, i) => `<tr>
+      <th>${_escHtml(labels[i] || String(i))}</th>
+      ${row.map((value, j) => {
+        const level = Number(value || 0) / maxMatrix;
+        const bg = i === j
+          ? `rgba(22, 163, 74, ${0.15 + level * 0.65})`
+          : `rgba(239, 68, 68, ${0.08 + level * 0.55})`;
+        return `<td style="background:${bg}">${value || 0}</td>`;
+      }).join('')}
+    </tr>`).join('')}</tbody>
+  </table></div>` : '<p class="news-experiment-empty">暂无混淆矩阵</p>';
+
+  const historyLine = history.length ? `<div class="news-history-line">
+    ${history.map(row => {
+      const h = Math.max(4, Number(row.val_macro_f1 || 0) * 100);
+      return `<span title="第 ${row.epoch} 轮 F1 ${Number(row.val_macro_f1 || 0).toFixed(4)}" style="height:${h.toFixed(1)}%"></span>`;
+    }).join('')}
+  </div>` : '<p class="news-experiment-empty">暂无训练曲线</p>';
+
+  const strategyChips = strategyRows.map(item =>
+    `<span class="news-exp-chip ${item.strategy === summary.selected_input_strategy ? 'good' : ''}">${_escHtml(item.strategy)} ${Number(item.macro_f1 || 0).toFixed(4)}</span>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <div class="news-exp-summary">
+      <div><strong>${_escHtml(summary.best_model || data.default_model || '--')}</strong><span>默认模型</span></div>
+      <div><strong>${_pct(summary.best_macro_f1, 2)}</strong><span>Macro F1</span></div>
+      <div><strong>${summary.total_samples || '--'}</strong><span>训练样本</span></div>
+      <div><strong>${_escHtml(summary.selected_input_strategy || '--')}</strong><span>输入策略</span></div>
+    </div>
+    <div class="news-exp-grid">
+      <section><h4>模型 Macro F1 对比</h4>${modelBars || '<p class="news-experiment-empty">暂无模型指标</p>'}</section>
+      <section><h4>数据集类别分布</h4>${countBars || '<p class="news-experiment-empty">暂无样本分布</p>'}</section>
+    </div>
+    <section class="news-exp-section"><h4>输入策略验证</h4><div class="news-exp-chip-row">${strategyChips || '<span class="news-exp-chip">暂无策略对比</span>'}</div></section>
+    <section class="news-exp-section"><h4>弱项类别</h4><div class="news-exp-chip-row">${weak || '<span class="news-exp-chip good">暂无明显弱项</span>'}</div></section>
+    <section class="news-exp-section"><h4>Top 混淆类别对</h4><div class="news-exp-chip-row">${confusions || '<span class="news-exp-chip good">暂无明显混淆</span>'}</div></section>
+    <section class="news-exp-section"><h4>TextCNN 训练曲线</h4>${historyLine}</section>
+    <section class="news-exp-section"><h4>各类别指标</h4><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>类别</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead><tbody>${classRows}</tbody></table></div></section>
+    <section class="news-exp-section"><h4>混淆矩阵</h4>${matrixTable}</section>
+    <section class="news-exp-section"><h4>数据清洗</h4><div class="news-exp-chip-row">
+      <span class="news-exp-chip">清洗前 ${cleaning.before || '--'}</span>
+      <span class="news-exp-chip good">清洗后 ${cleaning.after || summary.total_samples || '--'}</span>
+      <span class="news-exp-chip warn">去重 ${cleaning.dropped_duplicate || 0}</span>
+      <span class="news-exp-chip warn">过短/空文本 ${(cleaning.dropped_short || 0) + (cleaning.dropped_empty || 0)}</span>
+    </div></section>`;
+}
+
+function loadNewsClassifySamples() {
+  if (_newsClassifySamplesLoaded) return;
+  fetch('/static/news_text_classify/demo_samples.csv')
+    .then(r => r.text())
+    .then(text => {
+      _newsClassifySamplesLoaded = true;
+      _newsClassifySamples = _parseCsv(text);
+      const select = $('newsClassifySample');
+      if (select) {
+        select.innerHTML = '<option value="">选择样例填入</option>' + _newsClassifySamples.map((s, i) =>
+          `<option value="${i}">${_escHtml(s.category || '')} · ${_escHtml((s.title || '').slice(0, 22))}</option>`
+        ).join('');
+      }
+    })
+    .catch(() => {});
+}
+
+async function runNewsClassify() {
+  const title = ($('newsClassifyTitle')?.value || '').trim();
+  const content = ($('newsClassifyContent')?.value || '').trim();
+  if (!title) { showToast('请输入新闻标题'); return; }
+  const modelKey = $('newsClassifyModel')?.value || 'best';
+  const btn = $('btnNewsClassify');
+  if (btn) { btn.disabled = true; btn.innerHTML = spinnerHTML() + '分类中…'; }
+  try {
+    const res = await fetch('/api/text-classify/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ title, content, model_key: modelKey }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    const wrap = $('newsClassifyResult');
+    if (wrap) {
+      wrap.innerHTML = renderNewsClassifyResultCard(data, '分类结果');
+      wrap.hidden = false;
+    }
+  } catch (err) {
+    showToast('分类失败：' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '开始分类'; }
+  }
+}
+
+async function runNewsClassifyBatch() {
+  const input = $('newsClassifyCsv');
+  const file = input && input.files && input.files[0];
+  if (!file) { showToast('请选择 CSV 文件'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('model_key', $('newsClassifyModel')?.value || 'best');
+  const btn = $('btnNewsClassifyBatch');
+  if (btn) { btn.disabled = true; btn.innerHTML = spinnerHTML() + '分类中…'; }
+  try {
+    const res = await fetch('/api/text-classify/batch', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    _newsClassifyBatchRows = data.results || [];
+    renderNewsClassifyBatch(_newsClassifyBatchRows);
+  } catch (err) {
+    showToast('批量分类失败：' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '上传并分类'; }
+  }
+}
+
+function renderNewsClassifyBatch(rows) {
+  const panel = $('newsClassifyBatchResult');
+  const table = $('newsClassifyBatchTable');
+  if (!panel || !table) return;
+  if (!rows.length) {
+    table.innerHTML = '<p style="color:#94a3b8;padding:12px">没有可分类的记录</p>';
+  } else {
+    table.innerHTML = `
+      <table class="admin-table">
+        <thead><tr><th>行</th><th>标题</th><th>类别</th><th>置信度</th><th>模型</th></tr></thead>
+        <tbody>${rows.map(item => `<tr>
+          <td>${item.row}</td>
+          <td title="${_escHtml(item.title || '')}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(item.title || '')}</td>
+          <td><span class="admin-badge admin-badge--trained">${_escHtml(item.result.category || '--')}</span></td>
+          <td>${Math.round(item.result.confidence || 0)}%</td>
+          <td>${_escHtml(item.result.model_key || '--')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+  panel.hidden = false;
+}
+
+function downloadNewsClassifyBatchCsv() {
+  if (!_newsClassifyBatchRows.length) return;
+  const header = ['row', 'title', 'category', 'confidence', 'model_key'];
+  const lines = [header.join(',')];
+  _newsClassifyBatchRows.forEach(item => {
+    const cells = [
+      item.row,
+      item.title || '',
+      item.result.category || '',
+      (item.result.confidence || 0).toFixed(2),
+      item.result.model_key || '',
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`);
+    lines.push(cells.join(','));
+  });
+  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'news_classify_results.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+(() => {
+  const btn = $('btnNewsClassify');
+  if (btn) btn.addEventListener('click', runNewsClassify);
+  const clearBtn = $('btnNewsClassifyClear');
+  if (clearBtn) clearBtn.addEventListener('click', () => {
+    if ($('newsClassifyTitle')) $('newsClassifyTitle').value = '';
+    if ($('newsClassifyContent')) $('newsClassifyContent').value = '';
+    if ($('newsClassifyResult')) $('newsClassifyResult').hidden = true;
+  });
+  const sampleSelect = $('newsClassifySample');
+  if (sampleSelect) sampleSelect.addEventListener('change', () => {
+    const idx = Number(sampleSelect.value);
+    const sample = _newsClassifySamples[idx];
+    if (!sample) return;
+    if ($('newsClassifyTitle')) $('newsClassifyTitle').value = sample.title || '';
+    if ($('newsClassifyContent')) $('newsClassifyContent').value = sample.content || '';
+  });
+  const batchBtn = $('btnNewsClassifyBatch');
+  if (batchBtn) batchBtn.addEventListener('click', runNewsClassifyBatch);
+  const dlBtn = $('btnNewsClassifyDownloadCsv');
+  if (dlBtn) dlBtn.addEventListener('click', downloadNewsClassifyBatchCsv);
+})();
+
 // ════════════════════════════════════════════════════════════════
 // 文本 AI 生成检测 (XAI) 功能
 // ════════════════════════════════════════════════════════════════

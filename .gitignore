@@ -138,11 +138,13 @@ transformers/
 vlmeval/
 my_model/
 /data
+resources/news_text_classify/_candidate_artifacts/
 
 # Pytorch
 *.pth
 !finetuned_fake_real_resnet50.pth
 *.pt
+!resources/news_text_classify/artifacts/textcnn.pt
 
 # ast template
 ast_index_file.py

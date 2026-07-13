@@ -28,7 +28,7 @@ from backend.database import Base, engine
 from backend.exceptions import register_exception_handlers
 from backend.models.feedback import FeedbackRecord as _FeedbackRecord  # noqa: F401 — registers table
 from backend.rate_limit import limiter
-from backend.routers import auth, detect, report, admin, ws, feedback, history, search, text_detect, profile
+from backend.routers import auth, detect, report, admin, ws, feedback, history, search, text_detect, text_classify, profile
 from backend.clip_classify import _load_clip
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,12 @@ async def lifespan(app: FastAPI):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    if os.getenv("AIGI_SKIP_BACKGROUND_PRELOAD", "").lower() in {"1", "true", "yes"}:
+        logger.info("Skipping background model preload because AIGI_SKIP_BACKGROUND_PRELOAD is set.")
+        yield
+        await close_redis()
+        return
     
     # 在后台加载 CLIP 模型（不阻塞应用启动）
     def _preload_clip():
@@ -126,6 +132,7 @@ app.include_router(feedback.router)
 app.include_router(history.router)
 app.include_router(search.router)
 app.include_router(text_detect.router)
+app.include_router(text_classify.router)
 app.include_router(profile.router)
 
 # Static files & templates

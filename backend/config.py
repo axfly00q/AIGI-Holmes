@@ -34,6 +34,14 @@ class Settings(BaseSettings):
         "finetuned_fake_real_resnet50.pth",
     )
 
+    # News text classification artifacts
+    NEWS_CLASSIFY_ARTIFACT_DIR: str = os.path.join(
+        getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(__file__))),
+        "resources",
+        "news_text_classify",
+        "artifacts",
+    )
+
     # Doubao AI
     DOUBAO_API_KEY: str = ""
     DOUBAO_MODEL: str = "doubao-pro-32k"

@@ -45,3 +45,23 @@ class TextDetectionRecord(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class NewsClassificationRecord(Base):
+    """新闻文本分类历史记录。"""
+    __tablename__ = "news_classification_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    text_hash: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    content_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column(String(32), index=True)
+    confidence: Mapped[float] = mapped_column(Float)
+    probs_json: Mapped[str] = mapped_column(Text)
+    keywords_json: Mapped[str] = mapped_column(Text)
+    model_key: Mapped[str] = mapped_column(String(32))
+    model_version: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

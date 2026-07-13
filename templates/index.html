@@ -50,6 +50,13 @@
           </svg>
           <span>检测历史</span>
         </button>
+        <button class="sidebar-nav-item" data-tab="news-classify">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.5 5.25h15M4.5 9.75h15M4.5 14.25h8.25M4.5 18.75h6"/>
+            <path d="M15.75 14.25l1.5 1.5 3-3"/>
+          </svg>
+          <span>新闻文本分类</span>
+        </button>
         <button class="sidebar-nav-item" data-tab="text">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 4.5v15m6.364.5L9.172 9.172a4 4 0 015.656-5.656l6.364 6.364M9 4.5L4.757 8.743a4 4 0 005.656 5.656"/>
@@ -347,8 +354,10 @@
                 <span>文章文本真实性检测</span>
               </div>
               <button class="btn-secondary btn-sm" id="btnDetectUrlText">检测文章文本</button>
+              <button class="btn-secondary btn-sm" id="btnClassifyUrlNews">新闻文本分类</button>
             </div>
             <div class="url-text-detect-result" id="urlTextDetectResult" hidden></div>
+            <div class="url-text-detect-result" id="urlNewsClassifyResult" hidden></div>
           </div>
 
           <!-- 多维分析面板 -->
@@ -534,6 +543,7 @@
           <!-- 子标签栏 — 管理员可见"管理后台"，普通用户/审核员仅显示"我的记录" -->
           <div class="history-tabs" id="historyTabs">
             <button class="history-tab-btn active" data-history-tab="my-records">我的记录</button>
+            <button class="history-tab-btn" data-history-tab="news-classify-records">新闻分类记录</button>
             <button class="history-tab-btn history-tab-admin" data-history-tab="admin-panel">管理后台</button>
           </div>
 
@@ -550,6 +560,27 @@
             </div>
             <div class="admin-table-wrap" id="myRecordsTable"></div>
             <div class="admin-pagination" id="myRecordsPagination"></div>
+          </div>
+
+          <!-- 子面板：新闻文本分类记录 -->
+          <div class="history-pane" id="history-news-classify-records">
+            <div class="admin-filter-row">
+              <input class="admin-search-input" id="newsClassifyHistorySearch" placeholder="搜索新闻标题…" autocomplete="off" />
+              <select class="admin-filter-select" id="newsClassifyHistoryCategory">
+                <option value="">全部类别</option>
+                <option value="财经">财经</option>
+                <option value="体育">体育</option>
+                <option value="科技">科技</option>
+                <option value="娱乐">娱乐</option>
+                <option value="社会">社会</option>
+                <option value="教育">教育</option>
+                <option value="军事">军事</option>
+                <option value="汽车">汽车</option>
+              </select>
+              <span class="admin-total-hint" id="newsClassifyHistoryTotal"></span>
+            </div>
+            <div class="admin-table-wrap" id="newsClassifyHistoryTable"></div>
+            <div class="admin-pagination" id="newsClassifyHistoryPagination"></div>
           </div>
 
           <!-- 子面板：管理后台 (仅admin可见) -->
@@ -631,6 +662,75 @@
               <div class="admin-table-wrap" id="adminFeedbackTable"></div>
               <div class="admin-pagination" id="adminFeedbackPagination"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- ====== 新闻文本分类 ====== -->
+        <div class="tab-pane" id="tab-news-classify" role="tabpanel">
+          <div class="news-classify-layout">
+            <section class="news-classify-input">
+              <div class="news-classify-toolbar">
+                <div>
+                  <label class="form-label">模型</label>
+                  <select class="admin-filter-select" id="newsClassifyModel"></select>
+                </div>
+                <div>
+                  <label class="form-label">演示样例</label>
+                  <select class="admin-filter-select" id="newsClassifySample">
+                    <option value="">选择样例填入</option>
+                  </select>
+                </div>
+              </div>
+
+              <label class="form-label">新闻标题</label>
+              <input id="newsClassifyTitle" class="admin-search-input news-classify-title" type="text" placeholder="输入新闻标题…" autocomplete="off" />
+
+              <label class="form-label">新闻正文 / 摘要</label>
+              <textarea id="newsClassifyContent" class="text-input news-classify-content" rows="8" placeholder="可粘贴新闻正文或摘要；系统会以标题为主、正文摘要为辅进行分类。"></textarea>
+
+              <div class="text-actions">
+                <button class="btn-primary" id="btnNewsClassify">开始分类</button>
+                <button class="btn-secondary" id="btnNewsClassifyClear">清空</button>
+              </div>
+
+              <div class="news-classify-batch">
+                <div class="news-classify-batch-head">
+                  <div>
+                    <h4>CSV 批量分类</h4>
+                    <p>固定列名：title, content；单次最多 100 条。</p>
+                  </div>
+                  <input id="newsClassifyCsv" type="file" accept=".csv,text/csv" />
+                </div>
+                <button class="btn-secondary" id="btnNewsClassifyBatch">上传并分类</button>
+              </div>
+            </section>
+
+            <section class="news-classify-output">
+              <div class="news-classify-card" id="newsClassifyResult" hidden></div>
+              <div class="news-classify-card">
+                <div class="news-classify-card-head">
+                  <h3>模型对比</h3>
+                  <span id="newsClassifyModelVersion"></span>
+                </div>
+                <div class="admin-table-wrap" id="newsClassifyMetrics"></div>
+              </div>
+              <div class="news-classify-card">
+                <div class="news-classify-card-head">
+                  <h3>实验分析</h3>
+                  <span id="newsClassifyExperimentStatus">读取中</span>
+                </div>
+                <div id="newsClassifyExperimentPanel" class="news-experiment-panel">
+                  <p class="news-experiment-empty">正在加载模型实验指标…</p>
+                </div>
+              </div>
+              <div class="news-classify-card" id="newsClassifyBatchResult" hidden>
+                <div class="news-classify-card-head">
+                  <h3>批量结果</h3>
+                  <button class="btn-secondary btn-sm" id="btnNewsClassifyDownloadCsv">下载 CSV</button>
+                </div>
+                <div class="admin-table-wrap" id="newsClassifyBatchTable"></div>
+              </div>
+            </section>
           </div>
         </div>
 

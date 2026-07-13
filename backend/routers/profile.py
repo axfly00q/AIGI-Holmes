@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth import hash_password, verify_password
 from backend.database import get_db
 from backend.dependencies import get_current_user
-from backend.models.detection import DetectionRecord
+from backend.models.detection import DetectionRecord, NewsClassificationRecord
 from backend.models.user import User
 
 router = APIRouter(prefix="/api/me", tags=["profile"])
@@ -193,6 +193,9 @@ async def clear_my_history(
 
     await db.execute(
         sa_delete(DetectionRecord).where(DetectionRecord.user_id == user.id)
+    )
+    await db.execute(
+        sa_delete(NewsClassificationRecord).where(NewsClassificationRecord.user_id == user.id)
     )
     await db.commit()
     return {"message": "检测历史已清除。"}
