@@ -3,12 +3,13 @@ AIGI-Holmes backend — user detection history routes.
 """
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.dependencies import get_current_user
 from backend.models.detection import DetectionRecord
+from backend.models.provenance import ProvenanceJob
 from backend.models.user import User
 from backend.detection_result import record_presentation
 
@@ -41,19 +42,31 @@ async def get_my_history(
     q = q.offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(q)).scalars().all()
 
+    records = []
+    for r in rows:
+        latest_job = (await db.execute(
+            select(ProvenanceJob)
+            .where(
+                ProvenanceJob.user_id == user.id,
+                ProvenanceJob.detection_id == r.id,
+            )
+            .order_by(desc(ProvenanceJob.created_at))
+            .limit(1)
+        )).scalar_one_or_none()
+        records.append({
+            "id": r.id,
+            "image_url": r.image_url,
+            "label": r.label,
+            "confidence": r.confidence,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "provenance_status": latest_job.status if latest_job else None,
+            "provenance_job_id": latest_job.id if latest_job else None,
+            **record_presentation(r),
+        })
+
     return {
         "total": total,
         "page": page,
         "page_size": page_size,
-        "records": [
-            {
-                "id": r.id,
-                "image_url": r.image_url,
-                "label": r.label,
-                "confidence": r.confidence,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                **record_presentation(r),
-            }
-            for r in rows
-        ],
+        "records": records,
     }

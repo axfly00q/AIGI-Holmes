@@ -104,6 +104,32 @@ def classify_image(pil_image) -> str:
         return "其他"
 
 
+def compare_image_similarity(first_image, second_image) -> float | None:
+    """Return CLIP cosine similarity for two images, or ``None`` if unavailable."""
+    global _loaded
+
+    if not _loaded:
+        _load_clip()
+        _loaded = True
+    if _clip_model is None or _clip_preprocess is None:
+        return None
+
+    try:
+        import torch
+
+        batch = torch.stack([
+            _clip_preprocess(first_image.convert("RGB")),
+            _clip_preprocess(second_image.convert("RGB")),
+        ]).to(_device)
+        with torch.no_grad():
+            features = _clip_model.encode_image(batch)
+            features = features / features.norm(dim=-1, keepdim=True)
+        return float((features[0] @ features[1]).item())
+    except Exception as exc:
+        logger.warning("compare_image_similarity failed: %s", str(exc))
+        return None
+
+
 def classify_text_image_consistency(pil_image, text: str) -> dict:
     """Check if an image is consistent with a given text description.
 

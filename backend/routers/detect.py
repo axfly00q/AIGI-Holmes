@@ -84,6 +84,7 @@ class DetectResponse(BaseModel):
 
 class UrlResultItem(BaseModel):
     index: int
+    detection_id: int | None = None
     url: str
     label: str
     label_zh: str
@@ -380,7 +381,6 @@ async def api_detect_url(
             supporting_signal("exif", "EXIF 来源分析", exif_result.get("score"), exif_result.get("details", ""), details=exif_result),
         ])
         det["signals"] = item["signals"]
-        results.append(item)
         total_confidence += det["confidence"]
         if det["verdict"]["code"] == "likely_ai_generated":
             fake_count += 1
@@ -392,7 +392,9 @@ async def api_detect_url(
         # persist
         img_bytes = io.BytesIO()
         img.save(img_bytes, format="JPEG")
-        await _save_record(db, det, _image_sha256(img_bytes.getvalue()), user, image_url=img_url)
+        record = await _save_record(db, det, _image_sha256(img_bytes.getvalue()), user, image_url=img_url)
+        item["detection_id"] = record.id
+        results.append(item)
 
     if not results:
         raise ImageFormatError("下载图片失败，请检查网络或尝试直接上传图片。")

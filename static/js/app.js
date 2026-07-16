@@ -689,7 +689,9 @@ function buildGalleryCard(it, showSearchBtn=true){
   }
   // 点击按钮时调用 _searchFromCard(this) 来读取 data-category
   const searchBtn = showSearchBtn ? `<button class="gallery-card__search-similar" data-category="${_escHtml(it.category || '')}" onclick="_searchFromCard(this)" title="用文章标题和图片类别在网络查找类似图片">查找类似图片</button>` : '';
-  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${_escHtml(verdictLabel)}</span>${catBadge}</div><p class="gallery-card__conf">AI生成风险：<span>${risk}%</span></p>${consistencyHtml}${logoHtml}${dimChipsHtml}<div class="gallery-card__mini-bars">${mb}</div>${cluesHtml}${searchBtn}</div></div>`;
+  const provenanceBtn = it.detection_id ? `<button class="gallery-card__provenance" data-detection-id="${it.detection_id}" data-category="${_escHtml(it.category || '')}" onclick="startProvenanceFromCard(this)" title="核验这张图片的可发现来源">来源核验</button>` : '';
+  const actionHtml = (searchBtn || provenanceBtn) ? `<div class="gallery-card__actions">${searchBtn}${provenanceBtn}</div>` : '';
+  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${_escHtml(verdictLabel)}</span>${catBadge}</div><p class="gallery-card__conf">AI生成风险：<span>${risk}%</span></p>${consistencyHtml}${logoHtml}${dimChipsHtml}<div class="gallery-card__mini-bars">${mb}</div>${cluesHtml}${actionHtml}</div></div>`;
 }
 function buildReportRow(it){
   const verdictCode=it.verdict?.code;
@@ -700,6 +702,203 @@ function buildReportRow(it){
   const faceText = (it.face_score != null && it.face_score !== 50) ? ` · 脸: ${Math.round(it.face_score)}%` : '';
   const exifText = it.exif_software ? ` · EXIF:${_escHtml(it.exif_software)}⚠` : (it.exif_score != null && it.exif_score >= 80 ? ' · EXIF:相机' : '');
   return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.verdict?.label_zh||it.label_zh)}</span><span class="report-row__conf">AI风险 ${Math.round(it.risk_score??it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}${logoText}${sealText}${faceText}${exifText}</span></div>`;
+}
+
+let _provenancePollTimer = null;
+let _provenanceContext = null;
+
+function _provenanceMatchLabel(type) {
+  return {
+    same_image: '同一图片',
+    cropped_version: '裁剪版本',
+    visually_similar: '仅视觉相似',
+    unrelated: '不相关',
+  }[type] || type || '--';
+}
+
+function _provenanceDateLabel(level) {
+  return { reliable: '可靠', reference: '参考', unknown: '未知' }[level] || '未知';
+}
+
+function _provenanceDateText(item) {
+  if (item.published_at) return new Date(item.published_at).toLocaleString();
+  return item.published_display || '未知';
+}
+
+function _provenanceImageSrc(url) {
+  return `/api/search/proxy/image?url=${encodeURIComponent(url || '')}`;
+}
+
+function _renderProvenanceRows(rows) {
+  if (!rows || rows.length === 0) {
+    return '<p style="color:#94a3b8;margin:10px 0 0;">暂无可展示证据</p>';
+  }
+  return rows.map(row => `
+    <div class="provenance-row">
+      <img src="${_provenanceImageSrc(row.image_url)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div style="min-width:0;">
+        <div class="provenance-row__title" title="${_escHtml(row.title || row.source_page_url || '')}">${_escHtml(row.title || row.domain || '未知来源')}</div>
+        <div class="provenance-row__url" title="${_escHtml(row.source_page_url || row.image_url || '')}">
+          ${row.source_page_url ? `<a href="${_escHtml(row.source_page_url)}" target="_blank" rel="noreferrer">${_escHtml(row.domain || row.source_page_url)}</a>` : _escHtml(row.domain || '--')}
+        </div>
+      </div>
+      <span>${_escHtml(_provenanceDateText(row))}</span>
+      <span class="provenance-chip">${_escHtml(_provenanceDateLabel(row.date_evidence))}</span>
+      <span class="provenance-chip">${_escHtml(_provenanceMatchLabel(row.match_type))}</span>
+    </div>
+  `).join('');
+}
+
+function renderProvenanceJob(job) {
+  const body = $('provenanceModalBody');
+  if (!body) return;
+  const running = ['queued', 'running'].includes(job.status);
+  const progress = Math.max(0, Math.min(100, Math.round(job.progress || 0)));
+  if (running) {
+    body.innerHTML = `
+      <p class="status-msg">${_escHtml(job.phase_label || '正在核验')}</p>
+      <div class="provenance-progress"><div class="provenance-progress__bar" style="width:${progress}%"></div></div>
+      <p style="font-size:12px;color:#64748b;margin:0;">${progress}% · 每张图片最多比对 12 个候选</p>
+    `;
+    return;
+  }
+
+  const earliest = job.earliest_source;
+  const earliestUrl = earliest && earliest.source_page_url;
+  const earliestText = earliestUrl
+    ? `<a href="${_escHtml(earliestUrl)}" target="_blank" rel="noreferrer">${_escHtml(earliest.domain || earliestUrl)}</a>`
+    : '暂未发现可验证来源';
+  const forceBtn = job.detection_id
+    ? `<button class="btn-detail" onclick="rerunProvenance(${job.detection_id})">重新核验</button>`
+    : '';
+
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+      <p class="status-msg ${job.status === 'failed' ? 'error' : 'success'}" style="margin:0;">${_escHtml(job.conclusion_text || '核验完成。')}</p>
+      ${forceBtn}
+    </div>
+    <div class="provenance-summary">
+      <div class="provenance-summary__item">
+        <span class="provenance-summary__label">最早可发现来源</span>
+        <span class="provenance-summary__value" title="${_escHtml(earliestUrl || '')}">${earliestText}</span>
+      </div>
+      <div class="provenance-summary__item">
+        <span class="provenance-summary__label">来源时间</span>
+        <span class="provenance-summary__value">${earliest ? _escHtml(_provenanceDateText(earliest)) : '--'}</span>
+      </div>
+      <div class="provenance-summary__item">
+        <span class="provenance-summary__label">匹配来源数量</span>
+        <span class="provenance-summary__value">${job.match_count || 0}</span>
+      </div>
+    </div>
+    <details class="provenance-details">
+      <summary>来源时间线</summary>
+      ${_renderProvenanceRows(job.timeline || [])}
+    </details>
+    <details class="provenance-details">
+      <summary>全部证据</summary>
+      ${_renderProvenanceRows(job.evidence || [])}
+    </details>
+    ${job.error_message ? `<p class="status-msg error">${_escHtml(job.error_message)}</p>` : ''}
+  `;
+}
+
+function _openProvenanceModal() {
+  const modal = $('provenanceModal');
+  if (modal) modal.hidden = false;
+}
+
+function _closeProvenanceModal() {
+  if (_provenancePollTimer) clearTimeout(_provenancePollTimer);
+  _provenancePollTimer = null;
+  const modal = $('provenanceModal');
+  if (modal) modal.hidden = true;
+}
+
+async function _pollProvenanceJob(jobId) {
+  try {
+    const res = await fetch(`/api/provenance/jobs/${jobId}`, { headers: authHeaders() });
+    const job = await res.json();
+    if (!res.ok) throw new Error(job.detail || `HTTP ${res.status}`);
+    renderProvenanceJob(job);
+    if (['queued', 'running'].includes(job.status)) {
+      _provenancePollTimer = setTimeout(() => _pollProvenanceJob(jobId), 1600);
+    }
+  } catch (err) {
+    const body = $('provenanceModalBody');
+    if (body) body.innerHTML = `<p class="status-msg error">来源核验状态读取失败：${_escHtml(err.message)}</p>`;
+  }
+}
+
+async function _createProvenanceJob(payload) {
+  if (!getToken()) {
+    $('loginModal').hidden = false;
+    return;
+  }
+  if (_provenancePollTimer) clearTimeout(_provenancePollTimer);
+  _openProvenanceModal();
+  const body = $('provenanceModalBody');
+  if (body) {
+    body.innerHTML = `
+      <p class="status-msg">正在创建来源核验任务…</p>
+      <div class="provenance-progress"><div class="provenance-progress__bar" style="width:4%"></div></div>
+    `;
+  }
+  try {
+    const res = await fetch('/api/provenance/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload),
+    });
+    const job = await res.json();
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) $('loginModal').hidden = false;
+      throw new Error(job.detail || `HTTP ${res.status}`);
+    }
+    renderProvenanceJob(job);
+    if (['queued', 'running'].includes(job.status)) {
+      _provenancePollTimer = setTimeout(() => _pollProvenanceJob(job.id), 1200);
+    }
+  } catch (err) {
+    if (body) body.innerHTML = `<p class="status-msg error">来源核验启动失败：${_escHtml(err.message)}</p>`;
+  }
+}
+
+function startProvenanceFromCard(button) {
+  const detectionId = Number(button.dataset.detectionId || 0);
+  if (!detectionId) return;
+  const category = button.dataset.category || '';
+  const sourcePageUrl = urlInput ? urlInput.value.trim() : '';
+  const queryText = [_urlPageTitle, category].filter(Boolean).join(' ').trim() || sourcePageUrl;
+  _provenanceContext = { detection_id: detectionId, source_page_url: sourcePageUrl, query_text: queryText };
+  _createProvenanceJob(_provenanceContext);
+}
+
+function startProvenanceFromHistory(detectionId) {
+  _provenanceContext = { detection_id: detectionId };
+  _createProvenanceJob(_provenanceContext);
+}
+
+function rerunProvenance(detectionId) {
+  const payload = { ...(_provenanceContext || {}), detection_id: detectionId, force: true };
+  _provenanceContext = payload;
+  _createProvenanceJob(payload);
+}
+
+async function viewProvenanceJob(jobId) {
+  if (!getToken()) {
+    $('loginModal').hidden = false;
+    return;
+  }
+  if (_provenancePollTimer) clearTimeout(_provenancePollTimer);
+  _openProvenanceModal();
+  const body = $('provenanceModalBody');
+  if (body) body.innerHTML = '<p class="status-msg">正在读取来源核验结果…</p>';
+  await _pollProvenanceJob(jobId);
+}
+
+if ($('btnProvenanceModalClose')) {
+  $('btnProvenanceModalClose').addEventListener('click', _closeProvenanceModal);
 }
 
 async function detectUrlText() {
@@ -2751,7 +2950,7 @@ async function loadMyRecords(page) {
     } else {
       wrap.innerHTML = `
         <table class="admin-table">
-          <thead><tr><th>ID</th><th>来源</th><th>结果</th><th>置信度</th><th>时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>ID</th><th>来源</th><th>结果</th><th>置信度</th><th>来源核验</th><th>时间</th><th>操作</th></tr></thead>
           <tbody>${data.records.map(d => `<tr>
             <td>${d.id}</td>
             <td title="${_escHtml(d.image_url||'')}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
@@ -2759,6 +2958,7 @@ async function loadMyRecords(page) {
             </td>
             <td class="result-cell--${d.verdict_code==='likely_ai_generated'?'fake':d.verdict_code==='likely_authentic'?'real':'uncertain'}">${_escHtml(d.verdict_label_zh||'旧模型记录')}</td>
             <td>${d.risk_score==null?'—':Math.round(d.risk_score)+'%'}</td>
+            <td>${d.image_url ? (d.provenance_job_id ? `<button class="btn-detail" onclick="viewProvenanceJob(${d.provenance_job_id})">${d.provenance_status === 'completed' ? '查看来源' : '核验中'}</button>` : `<button class="btn-detail" onclick="startProvenanceFromHistory(${d.id})">来源核验</button>`) : '<span style="color:#94a3b8;font-size:12px;">不支持</span>'}</td>
             <td>${new Date(d.created_at).toLocaleString()}</td>
             <td style="display:flex;gap:4px;align-items:center">
               <button class="btn-detail" onclick="openFeedbackFromHistory(${d.id},'${d.label}')" title="标记误判">详情</button>

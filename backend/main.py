@@ -27,8 +27,10 @@ from backend.config import get_settings
 from backend.database import Base, engine
 from backend.exceptions import register_exception_handlers
 from backend.models.feedback import FeedbackRecord as _FeedbackRecord  # noqa: F401 — registers table
+from backend.models.provenance import ProvenanceEvidence as _ProvenanceEvidence  # noqa: F401
+from backend.models.provenance import ProvenanceJob as _ProvenanceJob  # noqa: F401
 from backend.rate_limit import limiter
-from backend.routers import auth, detect, report, admin, ws, feedback, history, search, text_detect, text_classify, profile
+from backend.routers import auth, detect, report, admin, ws, feedback, history, search, text_detect, text_classify, profile, provenance
 from backend.clip_classify import _load_clip
 
 logger = logging.getLogger(__name__)
@@ -134,6 +136,7 @@ app.include_router(search.router)
 app.include_router(text_detect.router)
 app.include_router(text_classify.router)
 app.include_router(profile.router)
+app.include_router(provenance.router)
 
 # Static files & templates
 _static_dir = os.path.join(BASE_DIR, "static")
