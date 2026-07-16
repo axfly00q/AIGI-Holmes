@@ -10,6 +10,7 @@ from backend.database import get_db
 from backend.dependencies import get_current_user
 from backend.models.detection import DetectionRecord
 from backend.models.user import User
+from backend.detection_result import record_presentation
 
 router = APIRouter(prefix="/api", tags=["history"])
 
@@ -51,6 +52,7 @@ async def get_my_history(
                 "label": r.label,
                 "confidence": r.confidence,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
+                **record_presentation(r),
             }
             for r in rows
         ],

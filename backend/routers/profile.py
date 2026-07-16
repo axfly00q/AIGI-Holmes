@@ -17,6 +17,7 @@ from backend.auth import hash_password, verify_password
 from backend.database import get_db
 from backend.dependencies import get_current_user
 from backend.models.detection import DetectionRecord, NewsClassificationRecord
+from backend.detection_result import record_presentation
 from backend.models.user import User
 
 router = APIRouter(prefix="/api/me", tags=["profile"])
@@ -216,13 +217,15 @@ async def export_my_history(
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["ID", "图片来源", "检测结果", "置信度(%)", "检测时间"])
+    writer.writerow(["ID", "图片来源", "检测结果", "AI风险(%)", "模型状态", "检测时间"])
     for r in rows:
+        presentation = record_presentation(r)
         writer.writerow([
             r.id,
             r.image_url or "",
-            r.label or "",
-            f"{r.confidence:.1f}" if r.confidence is not None else "",
+            presentation["verdict_label_zh"],
+            f"{presentation['risk_score']:.1f}" if presentation["risk_score"] is not None else "",
+            "旧模型" if presentation["model_status"] == "legacy" else "当前模型",
             r.created_at.isoformat() if r.created_at else "",
         ])
 

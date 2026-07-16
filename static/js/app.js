@@ -381,6 +381,7 @@ const fileInput  = $('fileInput');
 const btnReupload = $('btnReupload');
 const btnClear   = $('btnClear');
 const btnDetect  = $('btnDetect');
+const btnDeepDetect = $('btnDeepDetect');
 const uploadStatus = $('uploadStatus');
 let selectedFile = null;
 
@@ -393,6 +394,7 @@ function showPreview(file) {
   btnReupload.hidden = false;
   btnClear.hidden = false;
   btnDetect.disabled = false;
+  if(btnDeepDetect) btnDeepDetect.disabled = false;
   setStatus(uploadStatus, '', '');
   hideResultCard();
 }
@@ -407,6 +409,7 @@ function clearUpload() {
   btnReupload.hidden = true;
   btnClear.hidden = true;
   btnDetect.disabled = true;
+  if(btnDeepDetect) btnDeepDetect.disabled = true;
   fileInput.value = '';
   setStatus(uploadStatus, '', '');
   $('reportDownload').hidden = true;
@@ -448,13 +451,13 @@ $('btnCamToggle').addEventListener('click', e => {
 });
 
 function renderResult(data) {
-  const isReal = data.label === 'REAL';
-  const cls = isReal ? 'real' : 'fake';
+  const verdictCode = data.verdict?.code;
+  const cls = verdictCode === 'likely_authentic' ? 'real' : (verdictCode === 'likely_ai_generated' ? 'fake' : 'uncertain');
   const v = $('verdict');
   v.className = 'verdict ' + cls;
-  $('verdictIcon').textContent = isReal ? '' : '';
-  $('verdictLabel').textContent = data.label_zh;
-  const c = Math.round(data.confidence);
+  $('verdictIcon').textContent = '';
+  $('verdictLabel').textContent = data.verdict?.label_zh || data.label_zh;
+  const c = Math.round(data.risk_score ?? data.confidence);
   $('confValue').textContent = c + '%';
   const b = $('confBar');
   b.className = 'progress-bar ' + cls;
@@ -507,8 +510,18 @@ function renderResult(data) {
   // 置信度阈值警告
   const confWarn = $('confThreshWarn');
   if (confWarn) {
-    const threshold = parseInt(localStorage.getItem('aigi_conf_threshold') || '60', 10);
-    confWarn.hidden = data.confidence >= threshold;
+    confWarn.textContent = verdictCode === 'inconclusive' ? '⚠ 当前结果处于灰区，请人工复核' : '';
+    confWarn.hidden = verdictCode !== 'inconclusive';
+  }
+  const signalSection = $('signalSection');
+  const signalList = $('signalList');
+  if(signalSection && signalList){
+    const signals = data.signals || [];
+    signalList.innerHTML = signals.map(s=>`<div class="signal-item">
+      <div class="signal-item__head"><span>${_escHtml(s.name||s.key||'检测信号')}</span><span class="signal-item__role">${s.used_for_verdict?'结论依据':'辅助参考'}${s.score==null?'':` · ${Math.round(s.score)}%`}</span></div>
+      <p class="signal-item__summary">${_escHtml(s.summary||'')}</p>
+    </div>`).join('');
+    signalSection.hidden = signals.length === 0;
   }
   const rp=document.querySelector('.result-panel');
   if(rp){rp.style.alignItems='flex-start';rp.style.justifyContent='flex-start';}
@@ -530,15 +543,17 @@ function renderResult(data) {
   }
 }
 
-btnDetect.addEventListener('click', async ()=>{
+async function runSingleDetection(deep=false){
   if(!selectedFile)return;
+  const activeBtn = deep && btnDeepDetect ? btnDeepDetect : btnDetect;
   btnDetect.disabled=true;
-  btnDetect.classList.add('loading');
-  btnDetect.innerHTML=spinnerHTML()+'检测中…';
+  if(btnDeepDetect) btnDeepDetect.disabled=true;
+  activeBtn.classList.add('loading');
+  activeBtn.innerHTML=spinnerHTML()+(deep?'深度分析中…':'检测中…');
   const fd=new FormData();
   fd.append('image',selectedFile);
   try{
-    const res=await fetch('/api/detect?cam=1',{method:'POST',body:fd,headers:authHeaders()});
+    const res=await fetch(`/api/detect?cam=1${deep?'&deep=1':''}`,{method:'POST',body:fd,headers:authHeaders()});
     const data=await res.json();
     if(!res.ok||data.error){
       setStatus(uploadStatus,'检测失败','error');
@@ -546,11 +561,11 @@ btnDetect.addEventListener('click', async ()=>{
       renderResult(data);
       lastDetectionId = data.detection_id || null;
       lastDetectionLabel = data.label || '';
-      setStatus(uploadStatus,'检测完成','success');
+      setStatus(uploadStatus,deep?'深度分析完成':'检测完成','success');
       // 浏览器通知
       if (localStorage.getItem('aigi_notify') === 'true' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('AIGI-Holmes 检测完成', {
-          body: `结果：${data.label_zh}（置信度 ${Math.round(data.confidence)}%）`,
+          body: `结果：${data.verdict?.label_zh||data.label_zh}（AI 风险 ${Math.round(data.risk_score??data.confidence)}%）`,
           icon: '/static/logo.png'
         });
       }
@@ -579,11 +594,15 @@ btnDetect.addEventListener('click', async ()=>{
   }catch(e){
     setStatus(uploadStatus,'网络错误','error');
   }finally{
-    btnDetect.classList.remove('loading');
-    btnDetect.innerHTML='开始检测';
+    activeBtn.classList.remove('loading');
+    activeBtn.innerHTML=deep?'深度分析':'开始检测';
     btnDetect.disabled=false;
+    if(btnDeepDetect) btnDeepDetect.disabled=false;
   }
-});
+}
+
+btnDetect.addEventListener('click', ()=>runSingleDetection(false));
+if(btnDeepDetect) btnDeepDetect.addEventListener('click', ()=>runSingleDetection(true));
 
 const urlInput = $('urlInput');
 const btnUrl = $('btnUrl');
@@ -631,7 +650,10 @@ function buildTextCard(d){
 }
 
 function buildGalleryCard(it, showSearchBtn=true){
-  const c=it.label==='REAL'?'real':'fake';
+  const verdictCode=it.verdict?.code;
+  const c=verdictCode==='likely_authentic'?'real':(verdictCode==='likely_ai_generated'?'fake':'uncertain');
+  const verdictLabel=it.verdict?.label_zh||it.label_zh;
+  const risk=Math.round(it.risk_score??it.confidence??0);
   const catBadge = it.category ? `<span class="gallery-card__cat">${it.category}</span>` : '';
   const consistencyHtml = it.consistency ? `<div class="gallery-card__consistency"><span class="consistency-dot" style="background:${it.consistency.score>=60?'#22c55e':it.consistency.score>=40?'#f59e0b':'#ef4444'}"></span><span>${it.consistency.assessment} ${Math.round(it.consistency.score)}%</span></div>` : '';
   // 媒体来源 Logo 徽章（Phase 3 新增）
@@ -667,16 +689,17 @@ function buildGalleryCard(it, showSearchBtn=true){
   }
   // 点击按钮时调用 _searchFromCard(this) 来读取 data-category
   const searchBtn = showSearchBtn ? `<button class="gallery-card__search-similar" data-category="${_escHtml(it.category || '')}" onclick="_searchFromCard(this)" title="用文章标题和图片类别在网络查找类似图片">查找类似图片</button>` : '';
-  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${it.label_zh}</span>${catBadge}</div><p class="gallery-card__conf">置信度：<span>${Math.round(it.confidence)}%</span></p>${consistencyHtml}${logoHtml}${dimChipsHtml}<div class="gallery-card__mini-bars">${mb}</div>${cluesHtml}${searchBtn}</div></div>`;
+  return `<div class="gallery-card${c==='fake'?' ai-generated':''}"><img class="gallery-card__img" src="${it.thumbnail}" alt="图"/><div class="gallery-card__body"><div class="gallery-card__top-row"><span class="gallery-card__badge ${c}">${_escHtml(verdictLabel)}</span>${catBadge}</div><p class="gallery-card__conf">AI生成风险：<span>${risk}%</span></p>${consistencyHtml}${logoHtml}${dimChipsHtml}<div class="gallery-card__mini-bars">${mb}</div>${cluesHtml}${searchBtn}</div></div>`;
 }
 function buildReportRow(it){
-  const c=it.label==='REAL'?'real':'fake';
+  const verdictCode=it.verdict?.code;
+  const c=verdictCode==='likely_authentic'?'real':(verdictCode==='likely_ai_generated'?'fake':'uncertain');
   const conText = it.consistency ? ` · 图文一致性: ${it.consistency.assessment}(${Math.round(it.consistency.score)}%)` : '';
   const logoText = it.logo_detected ? ` · 来源: ${_escHtml(it.logo_detected)}(${Math.round(it.logo_confidence||0)}%)` : '';
   const sealText = it.seal_score != null ? ` · 章: ${Math.round(it.seal_score)}%` : '';
   const faceText = (it.face_score != null && it.face_score !== 50) ? ` · 脸: ${Math.round(it.face_score)}%` : '';
   const exifText = it.exif_software ? ` · EXIF:${_escHtml(it.exif_software)}⚠` : (it.exif_score != null && it.exif_score >= 80 ? ' · EXIF:相机' : '');
-  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.label_zh)}</span><span class="report-row__conf">${Math.round(it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}${logoText}${sealText}${faceText}${exifText}</span></div>`;
+  return `<div class="report-row"><span class="report-row__index">图${it.index}</span><span class="report-row__badge ${c}">${_escHtml(it.verdict?.label_zh||it.label_zh)}</span><span class="report-row__conf">AI风险 ${Math.round(it.risk_score??it.confidence)}%</span><span class="report-row__url">${_escHtml(it.url)}${conText}${logoText}${sealText}${faceText}${exifText}</span></div>`;
 }
 
 async function detectUrlText() {
@@ -867,17 +890,20 @@ function renderUrlAnalysis(d) {
   const _total = dim.image_count || d.count || 0;
   const _real  = dim.real_count  || 0;
   const _fake  = dim.fake_count  || 0;
+  const _uncertain = dim.inconclusive_count || 0;
   $('urlStatsTotal').textContent = _total;
   $('urlStatsReal').textContent  = _real;
   $('urlStatsFake').textContent  = _fake;
+  if($('urlStatsUncertain')) $('urlStatsUncertain').textContent = _uncertain;
 
   // Status pills in summary panel
   const pillsEl = $('urlStatusPills');
   if (pillsEl) {
     pillsEl.innerHTML =
       `<span class="url-status-pill url-status-pill--total">共 ${_total} 张</span>` +
-      `<span class="url-status-pill url-status-pill--real">真实 ${_real} 张</span>` +
-      (_fake > 0 ? `<span class="url-status-pill url-status-pill--fake">AI生成 ${_fake} 张</span>` : '');
+      `<span class="url-status-pill url-status-pill--real">较可能真实 ${_real} 张</span>` +
+      (_fake > 0 ? `<span class="url-status-pill url-status-pill--fake">较可能AI ${_fake} 张</span>` : '') +
+      (_uncertain > 0 ? `<span class="url-status-pill">待复核 ${_uncertain} 张</span>` : '');
   }
 
   // Score circle
@@ -939,7 +965,7 @@ function renderUrlAnalysis(d) {
 
   // Report dimensions summary
   const dimSummary = $('reportDimensions');
-  const verdictText = dim.verdict || (score>=70?'该新闻页面图片以真实内容为主，图文一致性较好，可信度较高。':score>=40?'该新闻页面存在部分可疑图片，建议进一步核实。':'该新闻页面多张图片被判定为AI生成，建议谨慎引用，必要时核实图片来源。');
+  const verdictText = dim.page_assessment || dim.verdict || '页面辅助信号分析完成。';
   const _logoSignalHtml = (() => {
     const _logos = (d.results||[]).filter(r=>r.logo_detected).map(r=>r.logo_detected);
     if (_logos.length === 0) return '';
@@ -949,7 +975,7 @@ function renderUrlAnalysis(d) {
   dimSummary.innerHTML = `
     <div class="report-dim-grid report-dim-grid--8">
       <div class="report-dim-item">
-        <span class="report-dim-label">综合评分</span>
+        <span class="report-dim-label">页面辅助评估</span>
         <span class="report-dim-value" style="color:${score>=70?'#22c55e':score>=40?'#f59e0b':'#ef4444'}">${Math.round(score)}</span>
       </div>
       <div class="report-dim-item">
@@ -983,7 +1009,7 @@ function renderUrlAnalysis(d) {
     </div>
     ${_logoSignalHtml}
     <div class="report-conclusion">
-      <strong>检测结论：</strong>${verdictText}
+      <strong>辅助评估（不参与图片三态结论）：</strong>${verdictText}
     </div>
   `;
   reportSection.hidden = false;
@@ -1158,11 +1184,11 @@ const _ACCEPTED_RE = /\.(jpe?g|png|webp|gif|bmp|pdf|docx?|html?|txt)$/i;
 // 批量统计七维分类（每张结果出来立即更新雷达图）
 const _BATCH_CATS=['人物','动物','建筑','风景','食物','交通','其他'];
 function _makeCatMap(){const m={};_BATCH_CATS.forEach(c=>{m[c]={c:0,r:0,f:0};});return m;}
-let _batchStats={total:0,realCount:0,fakeCount:0,confSum:0,cats:_makeCatMap()};
+let _batchStats={total:0,realCount:0,fakeCount:0,uncertainCount:0,confSum:0,cats:_makeCatMap()};
 let _radarChart=null;
 
 function _resetBatchStats(){
-  _batchStats.total=0;_batchStats.realCount=0;_batchStats.fakeCount=0;_batchStats.confSum=0;
+  _batchStats.total=0;_batchStats.realCount=0;_batchStats.fakeCount=0;_batchStats.uncertainCount=0;_batchStats.confSum=0;
   _BATCH_CATS.forEach(c=>{_batchStats.cats[c].c=0;_batchStats.cats[c].r=0;_batchStats.cats[c].f=0;});
 }
 
@@ -1172,8 +1198,10 @@ function _updateBatchStatsFromResult(r){
   const realScore=(r.probs.find(p=>p.label==='REAL')||{score:0}).score;
   const fakeScore=(r.probs.find(p=>p.label==='FAKE')||{score:0}).score;
   _batchStats.total++;
-  if(r.label==='REAL') _batchStats.realCount++; else _batchStats.fakeCount++;
-  _batchStats.confSum+=r.confidence;
+  if(r.verdict?.code==='likely_authentic') _batchStats.realCount++;
+  else if(r.verdict?.code==='likely_ai_generated') _batchStats.fakeCount++;
+  else _batchStats.uncertainCount++;
+  _batchStats.confSum+=(r.verdict?.decision_confidence??0);
   _batchStats.cats[cat].c++;
   _batchStats.cats[cat].r+=realScore;
   _batchStats.cats[cat].f+=fakeScore;
@@ -1259,13 +1287,17 @@ function _refreshStatsPanel(){
   $('statsTotal').textContent=_batchStats.total;
   $('statsReal').textContent=_batchStats.realCount;
   $('statsFake').textContent=_batchStats.fakeCount;
+  if($('statsUncertain')) $('statsUncertain').textContent=_batchStats.uncertainCount;
   // 维度均值进度条
   const realPct=_batchStats.total?Math.round(_batchStats.realCount/_batchStats.total*100):0;
   const fakePct=_batchStats.total?Math.round(_batchStats.fakeCount/_batchStats.total*100):0;
+  const uncertainPct=_batchStats.total?Math.round(_batchStats.uncertainCount/_batchStats.total*100):0;
   const rb=$('batchDimReal'); if(rb){rb.style.width=realPct+'%';}
   const fb=$('batchDimFake'); if(fb){fb.style.width=fakePct+'%';}
   const rv=$('batchDimRealVal'); if(rv) rv.textContent=realPct+'%';
   const fv=$('batchDimFakeVal'); if(fv) fv.textContent=fakePct+'%';
+  const ub=$('batchDimUncertain'); if(ub){ub.style.width=uncertainPct+'%';}
+  const uv=$('batchDimUncertainVal'); if(uv) uv.textContent=uncertainPct+'%';
   // 导出按钮启用
   const expBtn=$('btnBatchExportPdf');
   if(expBtn) expBtn.disabled=(_batchStats.total===0);
@@ -1928,8 +1960,8 @@ async function loadAdminDetections(page) {
             <td title="${_escHtml(d.image_url||'')}" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
               ${d.image_url ? _escHtml(d.image_url.slice(0,35)) + '\u2026' : '\u672c\u5730\u4e0a\u4f20'}
             </td>
-            <td><span class="admin-badge ${d.label==='FAKE'?'admin-badge--fake':'admin-badge--real'}">${d.label==='FAKE'?'AI\u751f\u6210':'\u771f\u5b9e'}</span></td>
-            <td>${Math.round(d.confidence)}%</td>
+            <td><span class="admin-badge ${d.verdict_code==='likely_ai_generated'?'admin-badge--fake':d.verdict_code==='likely_authentic'?'admin-badge--real':''}">${_escHtml(d.verdict_label_zh||'\u65e7\u6a21\u578b\u8bb0\u5f55')}</span></td>
+            <td>${d.risk_score==null?'\u2014':Math.round(d.risk_score)+'%'}</td>
             <td>${new Date(d.created_at).toLocaleString()}</td>
             <td>
               <button class="admin-stats-btn" onclick="openImageStats(${d.id})" title="\u67e5\u770b\u56fe\u7247\u7edf\u8ba1">\ud83d\udcca</button>
@@ -2725,8 +2757,8 @@ async function loadMyRecords(page) {
             <td title="${_escHtml(d.image_url||'')}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
               ${d.image_url ? _escHtml(d.image_url.slice(0,40)) + '…' : '本地上传'}
             </td>
-            <td class="result-cell--${d.label==='FAKE'?'fake':'real'}">${d.label==='FAKE'?'AI生成':'真实'}</td>
-            <td>${Math.round(d.confidence)}%</td>
+            <td class="result-cell--${d.verdict_code==='likely_ai_generated'?'fake':d.verdict_code==='likely_authentic'?'real':'uncertain'}">${_escHtml(d.verdict_label_zh||'旧模型记录')}</td>
+            <td>${d.risk_score==null?'—':Math.round(d.risk_score)+'%'}</td>
             <td>${new Date(d.created_at).toLocaleString()}</td>
             <td style="display:flex;gap:4px;align-items:center">
               <button class="btn-detail" onclick="openFeedbackFromHistory(${d.id},'${d.label}')" title="标记误判">详情</button>

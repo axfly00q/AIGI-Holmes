@@ -1,0 +1,24 @@
+result_version: "2.0"
+release_status: active
+architecture: ResNet50
+dataset: CIFAKE
+training_samples: 90000
+validation_samples: 10000
+split_seed: 42
+training_epochs: 1
+temperature: 1.0
+thresholds:
+  authentic_max: 35.0
+  ai_min: 65.0
+threshold_note: Conservative grey-zone thresholds retained because this architecture-focused round uses sampled final evaluation rather than full threshold calibration.
+weights_sha256: a1eb8b138da1c466597ceb7681d0f78c26a6bccb2e6a54664e59f8325aaea764
+legacy_weights_sha256: a4d1823914fcb715413ce53bd8b3c59d2fdfa96a0174ebce408a6bbd8d66cc77
+evaluation_scope: Balanced 1000-image sample from official CIFAKE test split, 500 FAKE and 500 REAL
+sampled_test_metrics:
+  accuracy: 0.932
+  macro_f1: 0.931978
+  roc_auc_fake: 0.978488
+  ece_15_bins: 0.057239
+  confusion_matrix_rows_true_fake_real:
+    - [475, 25]
+    - [43, 457]

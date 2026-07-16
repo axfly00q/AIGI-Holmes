@@ -24,6 +24,8 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 from PIL import Image
 
+from backend.detection_result import enrich_detection_result, load_result_metadata
+
 # ---------------------------------------------------------------------------
 # Base directory — compatible with both plain Python and PyInstaller .exe
 # ---------------------------------------------------------------------------
@@ -89,6 +91,7 @@ def _compute_model_version() -> str:
 
 
 MODEL_VERSION: str = _compute_model_version()
+MODEL_TEMPERATURE: float = max(0.05, float(load_result_metadata().get("temperature", 1.0)))
 
 _transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -485,7 +488,7 @@ def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
     img_tensor = _transform(img_rgb).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
         output = _model(img_tensor)
-        probs = torch.softmax(output, dim=1)[0]
+        probs = torch.softmax(output / MODEL_TEMPERATURE, dim=1)[0]
 
     results = [
         {"label": cls, "label_zh": _label_zh(cls), "score": probs[i].item() * 100}
@@ -512,7 +515,7 @@ def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
     # ── Step 5: VSFC bbox extraction ────────────────────────────────────────
     cam_regions = _extract_cam_boxes(cam_np, *img_rgb.size)
 
-    return {
+    return enrich_detection_result({
         "label": top["label"],
         "label_zh": top["label_zh"],
         "confidence": top["score"],
@@ -520,7 +523,7 @@ def detect_image(pil_image: Image.Image, with_cam: bool = False) -> dict:
         "explanation": explanation,
         "cam_image": cam_image,
         "cam_regions": cam_regions,
-    }
+    })
 
 
 def detect_batch(pil_images: list[Image.Image]) -> list[dict]:
@@ -534,7 +537,7 @@ def detect_batch(pil_images: list[Image.Image]) -> list[dict]:
     batch = torch.stack(tensors).to(DEVICE)
     with torch.no_grad():
         outputs = _model(batch)
-        all_probs = torch.softmax(outputs, dim=1)
+        all_probs = torch.softmax(outputs / MODEL_TEMPERATURE, dim=1)
 
     results = []
     for probs in all_probs:
@@ -544,7 +547,7 @@ def detect_batch(pil_images: list[Image.Image]) -> list[dict]:
         ]
         items.sort(key=lambda x: x["score"], reverse=True)
         top = items[0]
-        results.append({
+        results.append(enrich_detection_result({
             "label": top["label"],
             "label_zh": top["label_zh"],
             "confidence": top["score"],
@@ -554,7 +557,7 @@ def detect_batch(pil_images: list[Image.Image]) -> list[dict]:
                 cam_clues=_make_batch_clues(top["label"], top["score"]),
             ),
             "cam_image": None,
-        })
+        }))
     return results
 
 

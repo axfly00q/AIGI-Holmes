@@ -1,0 +1,11 @@
+dataset: CIFAKE
+split_seed: 42
+train_samples: 90000
+validation_samples: 10000
+architecture: ResNet50
+stage: frozen_backbone_head_training
+epochs:
+  - epoch: 1
+    train_accuracy: 0.9132
+    validation_macro_f1: 0.921456
+note: This architecture-focused round stopped the full final test at user request and used a balanced 1000-image test sample instead.

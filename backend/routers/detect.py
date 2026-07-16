@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.cache import get_cached_result, set_cached_result
-from backend.database import get_db
+from backend.database import async_session_factory, get_db
 from backend.dependencies import get_optional_user, require_role
 from backend.exceptions import ImageFormatError
 from backend.job_store import create_job, get_job, cleanup_job
@@ -37,6 +37,7 @@ from backend.text_detect import detect_text as _detect_text_content
 from backend.clip_classify import classify_image, classify_text_image_consistency
 from backend.analyzers import analyze_seal, analyze_frequency, analyze_edge, analyze_face, analyze_logo, analyze_exif
 from backend.analyzers.composite import compute_overall
+from backend.detection_result import record_presentation, supporting_signal
 
 router = APIRouter(prefix="/api", tags=["detection"])
 
@@ -74,6 +75,11 @@ class DetectResponse(BaseModel):
     detection_id: int | None = None
     cam_regions: list[dict] | None = None
     forensic_report: dict | None = None
+    verdict: dict
+    risk_score: float
+    signals: list[dict]
+    result_version: str
+    model_status: str
 
 
 class UrlResultItem(BaseModel):
@@ -92,6 +98,15 @@ class UrlResultItem(BaseModel):
     face_score: float | None = None
     logo_detected: str | None = None
     logo_confidence: float | None = None
+    exif_score: float | None = None
+    exif_software: str | None = None
+    exif_details: str | None = None
+    explanation: ExplanationItem | None = None
+    verdict: dict
+    risk_score: float
+    signals: list[dict]
+    result_version: str
+    model_status: str
 
 
 class DetectUrlResponse(BaseModel):
@@ -117,17 +132,50 @@ async def _run_detect_batch(images: list[Image.Image]) -> list[dict]:
     return await loop.run_in_executor(None, detect_batch, images)
 
 
+async def _run_supporting_analyzers(img: Image.Image) -> list[dict]:
+    """Run optional forensic signals; these never alter the final verdict."""
+    seal, frequency, edge, face, logo, exif = await asyncio.gather(
+        analyze_seal(img), analyze_frequency(img), analyze_edge(img),
+        analyze_face(img), analyze_logo(img), analyze_exif(img),
+    )
+    raw_signals = [
+        ("seal", "印章与标识分析", seal),
+        ("frequency", "频域自然度分析", frequency),
+        ("edge", "边缘一致性分析", edge),
+        ("face", "人脸伪造迹象分析", face),
+        ("logo", "媒体 Logo 分析", logo),
+        ("exif", "EXIF 来源分析", exif),
+    ]
+    return [
+        supporting_signal(
+            key, name, item.get("score"), item.get("details", "辅助信号分析完成。"),
+            details=item,
+        )
+        for key, name, item in raw_signals
+    ]
+
+
 async def _save_record(
-    db: AsyncSession, result: dict, image_hash: str, user: User | None, image_url: str | None = None
+    db: AsyncSession,
+    result: dict,
+    image_hash: str,
+    user: User | None,
+    image_url: str | None = None,
+    *,
+    user_id: int | None = None,
 ) -> DetectionRecord:
     record = DetectionRecord(
-        user_id=user.id if user else None,
+        user_id=user.id if user else user_id,
         image_hash=image_hash,
         image_url=image_url,
         label=result["label"],
         confidence=round(result["confidence"], 2),
         probs_json=json.dumps(result["probs"], ensure_ascii=False),
         model_version=MODEL_VERSION,
+        verdict_code=result.get("verdict", {}).get("code"),
+        risk_score=result.get("risk_score"),
+        signals_json=json.dumps(result.get("signals", []), ensure_ascii=False),
+        result_version=result.get("result_version"),
     )
     db.add(record)
     await db.commit()
@@ -149,6 +197,7 @@ async def api_detect(
     request: Request,           # slowapi 需要 Request 对象
     image: UploadFile = File(...),
     cam: int = Query(0, description="Set to 1 to include Grad-CAM heatmap"),
+    deep: int = Query(0, description="Set to 1 to include supporting forensic signals"),
     user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -157,7 +206,7 @@ async def api_detect(
         raise ImageFormatError("未上传图片")
 
     # cache check (skip if cam requested — cached result may lack cam_image)
-    if not cam:
+    if not cam and not deep:
         cached = await get_cached_result(raw)
         if cached:
             return cached
@@ -168,6 +217,8 @@ async def api_detect(
         raise ImageFormatError()
 
     result = await _run_detect(img, with_cam=bool(cam))
+    if deep:
+        result["signals"].extend(await _run_supporting_analyzers(img))
 
     # VSFC: generate evidence-anchored forensic report when API key is available
     forensic_report = None
@@ -187,7 +238,8 @@ async def api_detect(
 
     # cache & persist (cache without cam_image to save space)
     cache_data = {k: v for k, v in result.items() if k != "cam_image"}
-    await set_cached_result(raw, cache_data)
+    if not deep:
+        await set_cached_result(raw, cache_data)
     record = await _save_record(db, result, _image_sha256(raw), user)
     # 缓存 cam_image 供后续对话接口使用
     if result.get("cam_image"):
@@ -230,6 +282,8 @@ async def api_detect_url(
     category_counts: dict[str, int] = {}
     total_confidence: float = 0
     fake_count: int = 0
+    authentic_count: int = 0
+    inconclusive_count: int = 0
 
     for i, img_url in enumerate(img_urls, 1):
         img = await async_download_image(img_url)
@@ -297,6 +351,11 @@ async def api_detect_url(
             "label": det["label"],
             "label_zh": det["label_zh"],
             "confidence": round(det["confidence"], 1),
+            "verdict": det["verdict"],
+            "risk_score": round(det["risk_score"], 1),
+            "signals": list(det["signals"]),
+            "result_version": det["result_version"],
+            "model_status": det["model_status"],
             "probs": [{**p, "score": round(p["score"], 1)} for p in det["probs"]],
             "explanation": det.get("explanation"),
             "thumbnail": f"data:image/jpeg;base64,{b64}",
@@ -312,10 +371,23 @@ async def api_detect_url(
             "exif_software": exif_result.get("ai_software"),
             "exif_details": exif_result.get("details"),
         }
+        item["signals"].extend([
+            supporting_signal("seal", "印章与标识分析", seal_result.get("score"), seal_result.get("details", ""), details=seal_result),
+            supporting_signal("frequency", "频域自然度分析", freq_result.get("score"), freq_result.get("details", ""), details=freq_result),
+            supporting_signal("edge", "边缘一致性分析", edge_result.get("score"), edge_result.get("details", ""), details=edge_result),
+            supporting_signal("face", "人脸伪造迹象分析", face_result.get("score"), face_result.get("details", ""), details=face_result),
+            supporting_signal("logo", "媒体 Logo 分析", logo_result.get("score"), logo_result.get("details", ""), details=logo_result),
+            supporting_signal("exif", "EXIF 来源分析", exif_result.get("score"), exif_result.get("details", ""), details=exif_result),
+        ])
+        det["signals"] = item["signals"]
         results.append(item)
         total_confidence += det["confidence"]
-        if det["label"] == "FAKE":
+        if det["verdict"]["code"] == "likely_ai_generated":
             fake_count += 1
+        elif det["verdict"]["code"] == "likely_authentic":
+            authentic_count += 1
+        else:
+            inconclusive_count += 1
 
         # persist
         img_bytes = io.BytesIO()
@@ -329,7 +401,7 @@ async def api_detect_url(
     n = len(results)
     avg_confidence = round(total_confidence / n, 1) if n else 0
     avg_consistency = round(sum(consistency_scores) / len(consistency_scores), 1) if consistency_scores else 50
-    real_ratio = round((n - fake_count) / n * 100, 1) if n else 0
+    real_ratio = round(authentic_count / n * 100, 1) if n else 0
     avg_seal = round(sum(seal_scores) / len(seal_scores), 1) if seal_scores else 50.0
     avg_frequency = round(sum(frequency_scores) / len(frequency_scores), 1) if frequency_scores else 50.0
     avg_edge = round(sum(edge_scores) / len(edge_scores), 1) if edge_scores else 50.0
@@ -353,9 +425,13 @@ async def api_detect_url(
         "edge": avg_edge,
         "image_count": n,
         "fake_count": fake_count,
-        "real_count": n - fake_count,
+        "real_count": authentic_count,
+        "inconclusive_count": inconclusive_count,
         "categories": category_counts,
         "verdict": composite["verdict"],
+        "page_assessment": composite["verdict"],
+        "assessment_role": "supporting_only",
+        "used_for_image_verdict": False,
         "level": composite["level"],
     }
 
@@ -586,6 +662,11 @@ async def _process_batch_run(
             loop.run_in_executor(None, _build_thumb, item["image"]),
         )
 
+        async with async_session_factory() as batch_db:
+            await _save_record(
+                batch_db, result, _image_sha256(item["raw"]), None, user_id=user_id
+            )
+
         result_count += 1
         # 立即推送当前图片的结果，前端马上渲染该卡片
         await queue.put({
@@ -598,6 +679,11 @@ async def _process_batch_run(
                 "label": result["label"],
                 "label_zh": result["label_zh"],
                 "confidence": round(result["confidence"], 1),
+                "verdict": result["verdict"],
+                "risk_score": round(result["risk_score"], 1),
+                "signals": result["signals"],
+                "result_version": result["result_version"],
+                "model_status": result["model_status"],
                 "probs": [{**p, "score": round(p["score"], 1)} for p in result["probs"]],
                 "thumbnail": f"data:image/jpeg;base64,{thumbnail}",
                 "category": category,
@@ -679,10 +765,12 @@ async def api_analyze_detection(
         raise ImageFormatError(f"检测记录 {detection_id} 不存在")
 
     # 转换为字典
+    presentation = record_presentation(record)
     record_dict = {
         "label": record.label,
-        "label_zh": "AI生成" if record.label == "FAKE" else "真实照片",
+        "label_zh": presentation["verdict_label_zh"],
         "confidence": record.confidence,
+        **presentation,
         "probs": json.loads(record.probs_json) if record.probs_json else [],
     }
 
@@ -774,31 +862,20 @@ async def api_analyze_detection(
                     full_response += fallback_msg
                     yield f"data: {json.dumps({'chunk': fallback_msg}, ensure_ascii=False)}\n\n"
                 
-                label = record_dict.get("label", "UNKNOWN")
-                confidence = record_dict.get("confidence", 0)
-                probs = record_dict.get("probs", [])
-                
-                # 生成基于检测结果的本地分析
-                if label == "FAKE":
-                    analysis = f"根据 AI 检测模型分析，该图片被判定为 AI 生成，置信度 {confidence}%。\n\n"
-                    if confidence >= 90:
-                        analysis += "该图片具有非常强的 AI 生成特征，可能来自 Diffusion Model 或 GAN 生成。"
-                    elif confidence >= 75:
-                        analysis += "该图片显示出较强的 AI 生成特征，常见于图像合成或深度伪造。"
-                    elif confidence >= 60:
-                        analysis += "该图片具有可疑的 AI 生成特征，建议进一步核实。"
-                    else:
-                        analysis += "该图片可能由 AI 生成，但置信度相对较低，建议结合其他证据判断。"
+                verdict_code = record_dict.get("verdict_code")
+                risk_score = record_dict.get("risk_score")
+
+                if record_dict.get("model_status") == "legacy":
+                    analysis = "这是一条旧模型历史记录，未包含三态阈值和校准后的 AI 风险分。建议使用当前模型重新检测后再分析。"
+                elif verdict_code == "likely_ai_generated":
+                    analysis = f"当前三态结论为“较可能由 AI 生成”，AI 生成风险为 {risk_score:.1f}%。\n\n"
+                    analysis += "该结论只来自 ResNet50 分类模型；辅助取证信号不会改变最终结论。建议结合原始来源人工复核。"
+                elif verdict_code == "inconclusive":
+                    analysis = f"当前三态结论为“证据不足，暂无法判断”，AI 生成风险为 {risk_score:.1f}%。\n\n"
+                    analysis += "该概率处于模型灰区，不应强行归为真实或 AI 生成。建议补充来源、元数据或进行人工复核。"
                 else:
-                    analysis = f"根据 AI 检测模型分析，该图片被判定为真实照片，置信度 {confidence}%。\n\n"
-                    if confidence >= 90:
-                        analysis += "该图片表现出真实照片的典型特征，未发现明显 AI 生成迹象。"
-                    elif confidence >= 75:
-                        analysis += "该图片呈现真实照片的特征，背景、光影和细节符合常规成像规律。"
-                    elif confidence >= 60:
-                        analysis += "该图片倾向于真实拍摄，但存在少量不确定因素，建议结合其他信息核实。"
-                    else:
-                        analysis += "该图片可能为真实照片，但模型置信度较低，建议进一步确认。"
+                    analysis = f"当前三态结论为“较可能为真实照片”，AI 生成风险为 {risk_score:.1f}%。\n\n"
+                    analysis += "这表示模型更倾向真实，并非真实性证明；仍建议核验原始发布来源与上下文。"
                 
                 # 流式输出本地分析（模拟打字效果）
                 chunk_size = 50

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_db
 from backend.dependencies import require_role
 from backend.models.detection import DetectionRecord
+from backend.detection_result import record_presentation
 from backend.models.feedback import FeedbackRecord
 from backend.models.user import User
 
@@ -185,6 +186,7 @@ async def get_all_detections(
                 "label": r.label,
                 "confidence": r.confidence,
                 "model_version": r.model_version,
+                **record_presentation(r),
                 "created_at": r.created_at.isoformat()
             }
             for r in records

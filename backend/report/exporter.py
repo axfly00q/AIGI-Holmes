@@ -86,7 +86,9 @@ def export_pdf(report: dict) -> bytes:
         spaceBefore=10, spaceAfter=5, textColor=colors.black,
     ))
 
-    is_fake = (report.get("label", "") == "FAKE")
+    verdict_code = report.get("verdict_code")
+    is_fake = verdict_code == "likely_ai_generated"
+    is_uncertain = verdict_code == "inconclusive" or report.get("model_status") == "legacy"
     col_w = [100, 360]   # label column / value column (mm → pt auto-scaled)
 
     elements: list = []
@@ -96,10 +98,11 @@ def export_pdf(report: dict) -> bytes:
     elements.append(Spacer(1, 3 * mm))
 
     # ── Verdict banner ───────────────────────────────────────────
-    verdict_bg  = colors.Color(0.96, 0.91, 0.91) if is_fake else colors.Color(0.90, 0.96, 0.90)
-    verdict_fg  = colors.Color(0.78, 0.10, 0.10) if is_fake else colors.Color(0.04, 0.54, 0.18)
-    verdict_txt = "\u26a0 AI\u751f\u6210\u56fe\u50cf" if is_fake else "\u2713 \u771f\u5b9e\u7167\u7247"
-    conf_val    = report.get("confidence", 0)
+    verdict_bg  = colors.Color(0.98, 0.95, 0.84) if is_uncertain else (colors.Color(0.96, 0.91, 0.91) if is_fake else colors.Color(0.90, 0.96, 0.90))
+    verdict_fg  = colors.Color(0.65, 0.40, 0.02) if is_uncertain else (colors.Color(0.78, 0.10, 0.10) if is_fake else colors.Color(0.04, 0.54, 0.18))
+    verdict_txt = report.get("verdict_label_zh", report.get("conclusion", ""))
+    conf_val    = report.get("risk_score")
+    score_txt   = f"{conf_val:.1f}%" if conf_val is not None else "旧模型记录"
 
     banner_row = [[
         Paragraph(
@@ -108,7 +111,7 @@ def export_pdf(report: dict) -> bytes:
             f'{int(verdict_fg.blue*255):02x}"><b>{verdict_txt}</b></font>',
             styles["CN"],
         ),
-        Paragraph(f'\u7f6e\u4fe1\u5ea6\uff1a<b>{conf_val:.1f}%</b>', styles["CN"]),
+        Paragraph(f'AI \u751f\u6210\u98ce\u9669\uff1a<b>{score_txt}</b>', styles["CN"]),
     ]]
     banner = Table(banner_row, colWidths=[320, 140])
     banner.setStyle(TableStyle([
@@ -135,6 +138,8 @@ def export_pdf(report: dict) -> bytes:
     info_rows += [
         ["\u5ba1\u6838\u5efa\u8bae", report.get("suggestion", "")],
         ["\u6a21\u578b\u7248\u672c", report.get("model_version", "")],
+        ["\u7ed3\u679c\u7248\u672c", report.get("result_version") or "\u65e7\u6a21\u578b"],
+        ["\u6a21\u578b\u72b6\u6001", "\u65e7\u6a21\u578b" if report.get("model_status") == "legacy" else "\u5f53\u524d\u6a21\u578b"],
         ["\u56fe\u7247\u54c8\u5e0c", hash_display],
         ["\u68c0\u6d4b\u65f6\u95f4", report.get("created_at", "")],
     ]
@@ -185,6 +190,15 @@ def export_pdf(report: dict) -> bytes:
         elements.append(prob_table)
         elements.append(Spacer(1, 8 * mm))
 
+    signals = report.get("signals") or []
+    if signals:
+        elements.append(Paragraph("\u68c0\u6d4b\u4fe1\u53f7", styles["CNSection"]))
+        for signal in signals:
+            role = "\u7ed3\u8bba\u4f9d\u636e" if signal.get("used_for_verdict") else "\u8f85\u52a9\u53c2\u8003"
+            score = "" if signal.get("score") is None else f" {signal['score']:.1f}%"
+            elements.append(Paragraph(f"{signal.get('name', '')} [{role}]{score}\uff1a{signal.get('summary', '')}", styles["CNSmall"]))
+        elements.append(Spacer(1, 6 * mm))
+
     # ── Analysis & recommendation section ────────────────────────
     elements.append(Paragraph("\u68c0\u6d4b\u5206\u6790\u4e0e\u5efa\u8bae", styles["CNSection"]))
     explanation = report.get("explanation") or {}
@@ -221,16 +235,20 @@ def export_excel(report: dict) -> bytes:
     ws = wb.active
     ws.title = "\u68c0\u6d4b\u62a5\u544a"
 
-    is_fake = (report.get("label", "") == "FAKE")
+    verdict_code = report.get("verdict_code")
+    is_fake = verdict_code == "likely_ai_generated"
+    is_uncertain = verdict_code == "inconclusive" or report.get("model_status") == "legacy"
     _HEADER_FILL = PatternFill(start_color="EEEEEE", end_color="EEEEEE", fill_type="solid")
     _FAKE_FILL   = PatternFill(start_color="FFDDDD", end_color="FFDDDD", fill_type="solid")
     _REAL_FILL   = PatternFill(start_color="DDFFDD", end_color="DDFFDD", fill_type="solid")
+    _UNCERTAIN_FILL = PatternFill(start_color="FFF1CC", end_color="FFF1CC", fill_type="solid")
     _BOLD        = Font(bold=True)
     _FAKE_FONT   = Font(bold=True, color="CC0000")
     _REAL_FONT   = Font(bold=True, color="006600")
+    _UNCERTAIN_FONT = Font(bold=True, color="9A6700")
 
-    verdict_fill = _FAKE_FILL if is_fake else _REAL_FILL
-    verdict_font = _FAKE_FONT if is_fake else _REAL_FONT
+    verdict_fill = _UNCERTAIN_FILL if is_uncertain else (_FAKE_FILL if is_fake else _REAL_FILL)
+    verdict_font = _UNCERTAIN_FONT if is_uncertain else (_FAKE_FONT if is_fake else _REAL_FONT)
 
     # Report title
     ws.append(["AIGI-Holmes \u68c0\u6d4b\u62a5\u544a"])
@@ -247,10 +265,13 @@ def export_excel(report: dict) -> bytes:
             ws.cell(r, 2).font = verdict_font
 
     _add_row("\u68c0\u6d4b\u7ed3\u8bba", report.get("conclusion", ""))
-    _add_row("\u6807\u7b7e",   "AI\u751f\u6210\u56fe\u50cf" if is_fake else "\u771f\u5b9e\u7167\u7247", highlight=True)
-    _add_row("\u7f6e\u4fe1\u5ea6", f'{report.get("confidence", 0):.1f}%', highlight=True)
+    _add_row("\u4e09\u6001\u7ed3\u679c", report.get("verdict_label_zh", ""), highlight=True)
+    risk = report.get("risk_score")
+    _add_row("AI \u751f\u6210\u98ce\u9669", f'{risk:.1f}%' if risk is not None else "\u65e7\u6a21\u578b\u8bb0\u5f55", highlight=True)
+    _add_row("\u6a21\u578b\u72b6\u6001", "\u65e7\u6a21\u578b" if report.get("model_status") == "legacy" else "\u5f53\u524d\u6a21\u578b")
     _add_row("\u5ba1\u6838\u5efa\u8bae", report.get("suggestion", ""))
     _add_row("\u6a21\u578b\u7248\u672c", report.get("model_version", ""))
+    _add_row("\u7ed3\u679c\u7248\u672c", report.get("result_version") or "\u65e7\u6a21\u578b")
     _add_row("\u56fe\u7247\u54c8\u5e0c", report.get("image_hash", ""))
     _add_row("\u56fe\u7247 URL",  report.get("image_url", "") or "N/A")
     _add_row("\u68c0\u6d4b\u65f6\u95f4", report.get("created_at", ""))
@@ -272,9 +293,25 @@ def export_excel(report: dict) -> bytes:
         for col in range(1, 4):
             ws.cell(r, col).fill = row_fill
 
+    signals = report.get("signals") or []
+    if signals:
+        ws.append([])
+        ws.append(["\u68c0\u6d4b\u4fe1\u53f7", "\u89d2\u8272", "\u5206\u6570", "\u8bf4\u660e"])
+        for cell in ws[ws.max_row]:
+            cell.font = _BOLD
+            cell.fill = _HEADER_FILL
+        for signal in signals:
+            ws.append([
+                signal.get("name", ""),
+                "\u7ed3\u8bba\u4f9d\u636e" if signal.get("used_for_verdict") else "\u8f85\u52a9\u53c2\u8003",
+                "" if signal.get("score") is None else signal.get("score"),
+                signal.get("summary", ""),
+            ])
+
     ws.column_dimensions["A"].width = 16
     ws.column_dimensions["B"].width = 52
     ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 60
 
     buf = io.BytesIO()
     wb.save(buf)

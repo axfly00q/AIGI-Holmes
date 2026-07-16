@@ -10,7 +10,7 @@ import redis.asyncio as aioredis
 from backend.config import get_settings
 
 _CACHE_TTL = 3600  # 1 hour
-_KEY_PREFIX = "aigi:detect:"
+_KEY_PREFIX = "aigi:detect:v2:"
 
 _redis: aioredis.Redis | None = None
 

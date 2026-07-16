@@ -155,7 +155,7 @@
                 </div>
                 <div class="conf-section">
                   <div class="conf-header">
-                    <span class="conf-title">置信度</span>
+                    <span class="conf-title">AI 生成风险</span>
                     <span class="conf-value" id="confValue">0%</span>
                   </div>
                   <div class="progress-track">
@@ -166,6 +166,11 @@
                 <div class="prob-section">
                   <p class="prob-title">各类别概率</p>
                   <div class="prob-rows" id="probRows"></div>
+                </div>
+                <div class="signal-section" id="signalSection" hidden>
+                  <p class="prob-title">检测信号</p>
+                  <p class="signal-note">辅助信号仅供取证参考，不参与最终三态结论。</p>
+                  <div class="signal-list" id="signalList"></div>
                 </div>
               </div>
 
@@ -215,7 +220,10 @@
             </div>
           </div>
 
-          <button class="btn-detect" id="btnDetect" disabled>开始检测</button>
+          <div class="detect-actions">
+            <button class="btn-detect" id="btnDetect" disabled>开始检测</button>
+            <button class="btn-detect btn-deep-detect" id="btnDeepDetect" disabled>深度分析</button>
+          </div>
           <p class="status-msg" id="uploadStatus"></p>
 
           <!-- 检测依据 — 全宽区块，检测后展示 -->
@@ -368,7 +376,7 @@
             <div class="url-stats-panel" id="urlStatsPanel">
               <!-- 总体评分 -->
               <div class="url-score-wrap">
-                <span class="stats-label">综合可信度评分</span>
+                <span class="stats-label">页面辅助评估分</span>
                 <div class="url-score-circle" id="urlScoreCircle">
                   <svg viewBox="0 0 100 100" class="url-score-svg" width="80" height="80">
                     <circle cx="50" cy="50" r="44" class="url-score-bg"/>
@@ -396,8 +404,9 @@
               <!-- 统计数据 -->
               <div class="url-stats-counts">
                 共 <span id="urlStatsTotal">0</span> 张 ·
-                真实 <span class="stats-real" id="urlStatsReal">0</span> 张 ·
-                AI生成 <span class="stats-fake" id="urlStatsFake">0</span> 张
+                较可能真实 <span class="stats-real" id="urlStatsReal">0</span> 张 ·
+                较可能AI <span class="stats-fake" id="urlStatsFake">0</span> 张 ·
+                待复核 <span id="urlStatsUncertain">0</span> 张
               </div>
             </div>
           </div>
@@ -499,7 +508,7 @@
             <!-- 右栏：统计面板（每张结果实时刷新） -->
             <div class="batch-stats-panel" id="batchStatsPanel">
               <div class="stats-credibility-wrap">
-                <span class="stats-label">总体可信率</span>
+                <span class="stats-label">平均决策置信度</span>
                 <div class="stats-credibility-row">
                   <span class="stats-value" id="statsCredibility">--</span>
                   <span class="stats-unit">%</span>
@@ -508,7 +517,8 @@
               <div class="stats-counts">
                 共 <span id="statsTotal">0</span> 张 &nbsp;·&nbsp;
                 真实 <span class="stats-real" id="statsReal">0</span> 张 &nbsp;·&nbsp;
-                AI生成 <span class="stats-fake" id="statsFake">0</span> 张
+                AI生成 <span class="stats-fake" id="statsFake">0</span> 张 &nbsp;·&nbsp;
+                待复核 <span id="statsUncertain">0</span> 张
               </div>
               <div class="stats-radar-title">内容分类分布</div>
               <div class="stats-cats" id="statsCats"></div>
@@ -524,12 +534,17 @@
               <!-- 维度进度条（总体） -->
               <div class="stats-radar-title">总体占比</div>
               <div class="batch-dim-row">
-                <span class="batch-dim-label">真实均值</span>
+                <span class="batch-dim-label">真实占比</span>
                 <div class="batch-dim-track"><div class="batch-dim-fill real" id="batchDimReal" style="width:0%"></div></div>
                 <span class="batch-dim-score" id="batchDimRealVal">0%</span>
               </div>
               <div class="batch-dim-row">
-                <span class="batch-dim-label">AI均值</span>
+                <span class="batch-dim-label">待复核占比</span>
+                <div class="batch-dim-track"><div class="batch-dim-fill uncertain" id="batchDimUncertain" style="width:0%"></div></div>
+                <span class="batch-dim-score" id="batchDimUncertainVal">0%</span>
+              </div>
+              <div class="batch-dim-row">
+                <span class="batch-dim-label">AI占比</span>
                 <div class="batch-dim-track"><div class="batch-dim-fill fake" id="batchDimFake" style="width:0%"></div></div>
                 <span class="batch-dim-score" id="batchDimFakeVal">0%</span>
               </div>

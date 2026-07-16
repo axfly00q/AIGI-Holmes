@@ -151,6 +151,7 @@
   background: #f0fdf4;
   color: #16a34a;
 }
+.gallery-card__badge.uncertain { background: #fffbeb; color: #b45309; }
 
 .gallery-card__conf {
   font-size: 11px;
